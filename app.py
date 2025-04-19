@@ -7,19 +7,6 @@ Original file is located at
     https://colab.research.google.com/drive/197wwTjdKOcbmtnGGJoTD-YhHHoNmc85p
 """
 
-# ✅ Install and import everything
-!pip install streamlit openai pandas openpyxl pyngrok plotly --quiet
-
-import os
-from pyngrok import ngrok
-
-# ✅ Kill any previous sessions
-ngrok.kill()
-!pkill streamlit || echo "No Streamlit to kill"
-
-# ✅ SET YOUR KEYS HERE
-openai_key = "SG Open AI Secret Key"
-ngrok_token = "SG ngrok token"
 
 # ✅ Write secrets before app launches
 os.makedirs(".streamlit", exist_ok=True)

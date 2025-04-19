@@ -106,7 +106,8 @@ kpi_df = pd.DataFrame(kpi_data)
 # ---------------- AI Insights Section ----------------
 st.subheader("🧠 AI-Generated Insights")
 
-deep_dive_insights = analyze_wip_spikes(kpi_df, filtered_df)
+# 🔍 WIP Analyzer (used for AI insights)
+def analyze_wip_spikes(df_kpi, filtered_df):
     df_kpi["Closing WIP Num"] = df_kpi["Closing WIP"]
     rolling_avg = df_kpi["Closing WIP Num"].rolling(window=3).mean()
     df_kpi["WIP Spike"] = df_kpi["Closing WIP Num"] > rolling_avg * 1.2
@@ -115,7 +116,7 @@ deep_dive_insights = analyze_wip_spikes(kpi_df, filtered_df)
     analysis = []
 
     for day in spike_days:
-        day_raw = raw_df[raw_df["Start Date"].dt.strftime("%d-%b") == day]
+        day_raw = filtered_df[filtered_df["Start Date"].dt.strftime("%d-%b") == day]
         day_kpi = df_kpi[df_kpi["Report Date"] == day]
 
         pend_total = day_raw["Pend Case"].notna().sum()
@@ -141,6 +142,7 @@ deep_dive_insights = analyze_wip_spikes(kpi_df, filtered_df)
         })
 
     return analysis
+
 
 if st.button("Generate Insights with GPT"):
     with st.spinner("Analyzing and generating insights..."):

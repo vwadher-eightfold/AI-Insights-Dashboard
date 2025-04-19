@@ -23,6 +23,34 @@ df["Start Date"] = pd.to_datetime(df["Start Date"], errors='coerce')
 df["End Date"] = pd.to_datetime(df["End Date"], errors='coerce')
 df["Target Date"] = pd.to_datetime(df["Target Date"], errors='coerce')
 
+# ---------------- Filters Section ----------------
+st.sidebar.header("🔍 Filter Data")
+
+# Dropdown filters
+selected_portfolio = st.sidebar.multiselect("Portfolio", df["Portfolio"].dropna().unique(), default=df["Portfolio"].dropna().unique())
+selected_source = st.sidebar.multiselect("Source", df["Source"].dropna().unique(), default=df["Source"].dropna().unique())
+selected_event_type = st.sidebar.multiselect("Event Type", df["Event Type"].dropna().unique(), default=df["Event Type"].dropna().unique())
+selected_manual_rpa = st.sidebar.multiselect("Manual/RPA", df["Manual/RPA"].dropna().unique(), default=df["Manual/RPA"].dropna().unique())
+
+# Date range filter
+min_date = df["Start Date"].min()
+max_date = df["Start Date"].max()
+start_date, end_date = st.sidebar.date_input("Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
+
+# Apply filters to dataframe
+df = df[
+    (df["Portfolio"].isin(selected_portfolio)) &
+    (df["Source"].isin(selected_source)) &
+    (df["Event Type"].isin(selected_event_type)) &
+    (df["Manual/RPA"].isin(selected_manual_rpa)) &
+    (df["Start Date"] >= pd.to_datetime(start_date)) &
+    (df["Start Date"] <= pd.to_datetime(end_date))
+]
+
+if df.empty:
+    st.warning("⚠️ No data available for selected filters.")
+    st.stop()
+
 # ---------------- KPI Calculations ----------------
 min_date = df["Start Date"].min()
 max_date = max(df["Start Date"].max(), df["End Date"].max(), df["Target Date"].max())

@@ -275,38 +275,38 @@ st.info("Ask me anything about the operational data — trends, pend rates, SLA 
 from openai import OpenAI
 client = OpenAI(api_key=st.secrets["openai_key"])
 
-# We'll use the full unfiltered df here
-df_preview = df.head(100)
+# Limit preview to first 30 rows to stay within token limits
+df_preview = df.head(30)
 
 try:
     df_markdown = df_preview.to_markdown(index=False)
 except Exception:
-    df_markdown = df_preview.head(5).to_string(index=False)
+    df_markdown = df_preview.to_string(index=False)
 
 chat_query = st.text_area("💬 Ask a question to the AI about the data:")
 
 if st.button("Ask"):
     if not chat_query.strip():
-        st.warning("Please type a question to ask the AI.")
+        st.warning("Please enter a question.")
     else:
         with st.spinner("Thinking..."):
             try:
                 response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model="gpt-3.5-turbo",  # Stay within token limits
                     messages=[
                         {"role": "system", "content": "You are a helpful data analyst reviewing operational performance data from a back office team. Use the table to help answer user questions."},
-                        {"role": "user", "content": f"""Here is a preview of the operational data in markdown format:
+                        {"role": "user", "content": f"""Here is a preview of the operational data:
 
 {df_markdown}
 
-Now answer the following question about this data:
+Now answer this question about the data:
 
 {chat_query}
 """}
                     ],
                     temperature=0.5
                 )
-                st.success("✅ Response from AI:")
+                st.success("✅ AI's Response:")
                 st.markdown(response.choices[0].message.content)
             except Exception as e:
-                st.error(f"❌ An error occurred while processing your request:\n\n{e}")
+                st.error(f"❌ An error occurred:\n\n{e}")

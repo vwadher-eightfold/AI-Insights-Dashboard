@@ -269,48 +269,49 @@ st.subheader("📋 KPI Table")
 st.dataframe(chart_df, use_container_width=True)
 
 # ---------------- AI CHATBOT (Full Data) ----------------
-st.sidebar.markdown("💬 **Ask the AI**")
-user_question = st.sidebar.text_area("Type your question about the dataset 👇", height=100)
+st.markdown("## 🤖 Ask Your Data Anything (AI Chatbot)")
 
-if st.sidebar.button("Ask AI") and user_question.strip():
+# Use full original df (not filtered) for chatbot context
+df_preview = df.copy()
+
+try:
+    df_markdown = df_preview.to_markdown(index=False)
+except Exception:
+    df_markdown = df_preview.head(5).to_string(index=False)
+
+# Create chat input
+user_query = st.text_input("Ask a question about the operational data:")
+
+if user_query:
     with st.spinner("Thinking..."):
-        from openai import OpenAI
         client = OpenAI(api_key=st.secrets["openai_key"])
-
-        # Use only a lightweight preview of the full dataframe
-        df_preview = df.copy()
-        df_preview = df_preview.dropna(axis=1, how='all')  # Drop empty columns
-        df_preview = df_preview.head(100)  # Limit rows to avoid token limit
-
         prompt = f"""
-You are a senior business analyst.
+You are a data analyst chatbot for a back-office operations team.
 
-Below is a sample from a full operational dataset (first 100 rows):
+The user will ask natural language questions about the data. You will answer clearly and concisely.
 
-{df_preview.to_markdown(index=False)}
+Here is a preview of the data:
+{df_markdown}
 
-Now, please answer the following user question based on the data:
+User question:
+{user_query}
 
-**Question:** {user_question}
+Instructions:
+- Answer based on the data.
+- Use numbers or percentages when helpful.
+- Keep the tone professional and clear.
+- If something is unclear, explain what’s missing.
 
-Rules:
-- Be concise, insightful, and helpful.
-- If the data isn't sufficient, say so politely.
-- Format the response cleanly using markdown.
+Respond below:
 """
 
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are a helpful AI analyst."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.4
-            )
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a helpful operations data analyst."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3
+        )
 
-            answer = response.choices[0].message.content
-            st.sidebar.markdown("#### 📣 AI Response")
-            st.sidebar.markdown(answer)
-        except Exception as e:
-            st.sidebar.error(f"❌ Error while contacting OpenAI:\n{e}")
+        st.markdown(response.choices[0].message.content)

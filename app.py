@@ -23,29 +23,48 @@ df["Start Date"] = pd.to_datetime(df["Start Date"], errors='coerce')
 df["End Date"] = pd.to_datetime(df["End Date"], errors='coerce')
 df["Target Date"] = pd.to_datetime(df["Target Date"], errors='coerce')
 
-# ---------------- FILTER SECTION ----------------
+# ---------------- FILTER SECTION (Weekly Blocks) ----------------
 st.sidebar.header("📂 Filters")
 
-# 📅 Date range filter
-start_date, end_date = st.sidebar.date_input("Select date range", [df["Start Date"].min(), df["Start Date"].max()])
-if isinstance(start_date, datetime):
-    filtered_df = df[(df["Start Date"] >= pd.to_datetime(start_date)) & (df["Start Date"] <= pd.to_datetime(end_date))]
-else:
-    filtered_df = df.copy()
+# Get min/max dates
+min_date = df["Start Date"].min()
+max_date = df["Start Date"].max()
 
-# 📁 Portfolio filter (if column exists)
+# Create weekly blocks (Monday–Sunday)
+week_ranges = pd.date_range(start=min_date, end=max_date, freq='W-MON')
+weekly_options = []
+
+for i in range(len(week_ranges) - 1):
+    start = week_ranges[i]
+    end = week_ranges[i + 1] - pd.Timedelta(days=1)
+    label = f"{start.strftime('%Y-%m-%d')} to {end.strftime('%Y-%m-%d')}"
+    weekly_options.append((label, start, end))
+
+# Show weekly range as dropdown
+selected_week = st.sidebar.selectbox("📅 Select Week", [label for label, _, _ in weekly_options])
+
+# Get selected week’s start and end dates
+for label, start, end in weekly_options:
+    if label == selected_week:
+        selected_start, selected_end = start, end
+        break
+
+# Filter df based on selected week
+filtered_df = df[(df["Start Date"] >= selected_start) & (df["Start Date"] <= selected_end)]
+
+# Portfolio filter (if column exists)
 if "Portfolio" in df.columns:
     portfolios = st.sidebar.multiselect("Filter by Portfolio", options=sorted(df["Portfolio"].dropna().unique()))
     if portfolios:
         filtered_df = filtered_df[filtered_df["Portfolio"].isin(portfolios)]
 
-# 🎯 Source filter (optional, if exists)
+# Source filter (optional)
 if "Source" in df.columns:
     sources = st.sidebar.multiselect("Filter by Source", options=sorted(df["Source"].dropna().unique()))
     if sources:
         filtered_df = filtered_df[filtered_df["Source"].isin(sources)]
 
-# If no data after filters
+# No data warning
 if filtered_df.empty:
     st.warning("⚠️ No data matches the selected filters.")
     st.stop()

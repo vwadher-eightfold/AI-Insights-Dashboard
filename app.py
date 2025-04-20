@@ -70,7 +70,7 @@ if filtered_df.empty:
     st.stop()
 
 # ----------------------------------------------
-# RECOMPUTE KPI DATA on FILTERED SET
+# ✅ KPI CALCULATION ON FILTERED DATA
 # ----------------------------------------------
 min_date = filtered_df["Start Date"].min()
 max_date = max(filtered_df["Start Date"].max(), filtered_df["End Date"].max(), filtered_df["Target Date"].max())
@@ -119,7 +119,7 @@ for report_date in date_range:
 
     prev_closing_wip = closing_wip
 
-# 🎯 Set this as the KPI df for insights + charts
+# ✅ Set filtered KPI dataframe
 kpi_df = pd.DataFrame(kpi_data)
 
 # ---------------- AI Insights Section ----------------

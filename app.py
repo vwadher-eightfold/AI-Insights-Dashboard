@@ -107,7 +107,7 @@ kpi_df = pd.DataFrame(kpi_data)
 st.subheader("🧠 AI-Generated Insights")
 
 # 🔍 WIP Analyzer (used for AI insights)
-def analyze_wip_spikes(df_kpi, filtered_df):
+def analyze_wip_spikes(df_kpi, raw_df):
     df_kpi["Closing WIP Num"] = df_kpi["Closing WIP"]
     rolling_avg = df_kpi["Closing WIP Num"].rolling(window=3).mean()
     df_kpi["WIP Spike"] = df_kpi["Closing WIP Num"] > rolling_avg * 1.2
@@ -116,7 +116,7 @@ def analyze_wip_spikes(df_kpi, filtered_df):
     analysis = []
 
     for day in spike_days:
-        day_raw = filtered_df[filtered_df["Start Date"].dt.strftime("%d-%b") == day]
+        day_raw = raw_df[raw_df["Start Date"].dt.strftime("%d-%b") == day]
         day_kpi = df_kpi[df_kpi["Report Date"] == day]
 
         pend_total = day_raw["Pend Case"].notna().sum()
@@ -146,7 +146,7 @@ def analyze_wip_spikes(df_kpi, filtered_df):
 
 if st.button("Generate Insights with GPT"):
     with st.spinner("Analyzing and generating insights..."):
-        deep_dive_insights = analyze_wip_spikes(kpi_df, df)
+        deep_dive_insights = analyze_wip_spikes(kpi_df, filtered_df)  # 🔁 Updated here!
 
         client = OpenAI(api_key=st.secrets["openai_key"])
 
@@ -157,8 +157,14 @@ Below is structured data from a recent operational deep dive:
 
 {json.dumps(deep_dive_insights, indent=2)}
 
-Please return exactly **5 concise bullet points** with insights.
+Please review the data and return exactly **5 concise bullet points** that:
 
+- Are clear, punchy, and no longer than 2 lines each
+- Include relevant **metrics** (e.g. % pend rate, volume counts)
+- Highlight key **issues**, **trends**, and **root causes**
+- Use **markdown-style emphasis** (e.g. **bold**, emojis like 📉📈🛠️✅) for readability
+
+Output format:
 - 📌 **[Bold Insight]** – supporting number(s) and short explanation.
 """
 
@@ -170,33 +176,37 @@ Please return exactly **5 concise bullet points** with insights.
             ],
             temperature=0.5
         )
+        gpt_bullets = response.choices[0].message.content
+        st.markdown(gpt_bullets)
+        
+# ---------------- CHARTS SECTION ----------------
+st.markdown("## 📈 Operational Trends")
 
-        st.markdown(response.choices[0].message.content)
-
-# ---------------- Charts Section ----------------
-st.markdown("## 📈 Operational Trends (20–26 Jan)")
-
-selected_dates = ["20-Jan", "21-Jan", "22-Jan", "23-Jan", "24-Jan", "25-Jan", "26-Jan"]
-chart_df = kpi_df[kpi_df["Report Date"].isin(selected_dates)]
+# ✅ Auto-detect date range from filtered KPI data
+chart_df = kpi_df.copy()
 
 labels = list(chart_df["Report Date"])
 cases_received = list(chart_df["Cases Received"])
 cases_complete = list(chart_df["Cases Complete"])
 closing_wip = list(chart_df["Closing WIP"])
-wip_sla_pct = [int(x.replace('%', '')) for x in chart_df["WIP in SLA %"]]
-complete_sla_pct = [int(x.replace('%', '')) for x in chart_df["Complete Within SLA %"]]
+wip_sla_pct = [int(x.replace('%', '')) if '%' in x else 0 for x in chart_df["WIP in SLA %"]]
+complete_sla_pct = [int(x.replace('%', '')) if '%' in x else 0 for x in chart_df["Complete Within SLA %"]]
+
+# Pend Rate values from filtered KPI df
 pend_rate_chart = [
-    int(kpi_df[kpi_df["Report Date"] == date]["Pend Rate"].values[0].replace('%', ''))
-    if not kpi_df[kpi_df["Report Date"] == date].empty else 0
-    for date in selected_dates
+    int(row["Pend Rate"].replace('%', '')) if isinstance(row["Pend Rate"], str) else 0
+    for _, row in chart_df.iterrows()
 ]
 
-pend_reasons = df[df["Start Date"].dt.strftime("%d-%b").isin(selected_dates)]
+# Filter pend reasons for selected range
+pend_reasons = filtered_df[filtered_df["Start Date"].dt.strftime("%d-%b").isin(labels)]
 pend_reason_counts = pend_reasons["Pend Reason"].value_counts().to_dict()
 pend_reason_labels = list(pend_reason_counts.keys())
 pend_reason_values = list(pend_reason_counts.values())
 
+# ---------------- Row 1: WIP vs Cases + SLA Trends ----------------
 col1, col2 = st.columns(2)
+
 with col1:
     st.markdown("#### 📦 Cases Processed vs WIP")
     fig = go.Figure()
@@ -214,7 +224,9 @@ with col2:
     sla_fig.update_layout(height=360)
     st.plotly_chart(sla_fig, use_container_width=True)
 
+# ---------------- Row 2: Pie Chart + Pend Rate ----------------
 col3, col4 = st.columns(2)
+
 with col3:
     st.markdown("#### 🥧 Top Pend Reasons")
     pie_fig = px.pie(

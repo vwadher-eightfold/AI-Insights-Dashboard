@@ -268,52 +268,45 @@ with col4:
 st.subheader("📋 KPI Table")
 st.dataframe(chart_df, use_container_width=True)
 
-# ---------------- AI CHATBOT (Full Data) ----------------
-st.markdown("## 🤖 Ask Your Data Anything (AI Chatbot)")
+# ---------------- AI CHATBOT SECTION ----------------
+st.markdown("## 🤖 Ask the AI Chatbot")
+st.info("Ask me anything about the operational data — trends, pend rates, SLA issues, etc.")
 
-# Use full original df (not filtered) for chatbot context
-df_preview = df.copy()
+from openai import OpenAI
+client = OpenAI(api_key=st.secrets["openai_key"])
+
+# We'll use the full unfiltered df here
+df_preview = df.head(100)
 
 try:
     df_markdown = df_preview.to_markdown(index=False)
 except Exception:
     df_markdown = df_preview.head(5).to_string(index=False)
 
-# Create chat input
-user_query = st.text_input("Ask a question about the operational data:")
+chat_query = st.text_area("💬 Ask a question to the AI about the data:")
 
-if user_query:
-    with st.spinner("Thinking..."):
-        client = OpenAI(api_key=st.secrets["openai_key"])
-        prompt = f"""
-You are a data analyst chatbot for a back-office operations team.
+if st.button("Ask"):
+    if not chat_query.strip():
+        st.warning("Please type a question to ask the AI.")
+    else:
+        with st.spinner("Thinking..."):
+            try:
+                response = client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "You are a helpful data analyst reviewing operational performance data from a back office team. Use the table to help answer user questions."},
+                        {"role": "user", "content": f"""Here is a preview of the operational data in markdown format:
 
-The user will ask natural language questions about the data. You will answer clearly and concisely.
-
-Here is a preview of the data:
 {df_markdown}
 
-User question:
-{user_query}
+Now answer the following question about this data:
 
-Instructions:
-- Answer based on the data.
-- Use numbers or percentages when helpful.
-- Keep the tone professional and clear.
-- If something is unclear, explain what’s missing.
-
-Respond below:
-"""
-
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a helpful operations data analyst."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3
-        )
-
-        st.markdown(response.choices[0].message.content)
-except openai.RateLimitError:
-    st.error("⚠️ OpenAI rate limit reached. Please wait a bit or check your API usage.")
+{chat_query}
+"""}
+                    ],
+                    temperature=0.5
+                )
+                st.success("✅ Response from AI:")
+                st.markdown(response.choices[0].message.content)
+            except Exception as e:
+                st.error(f"❌ An error occurred while processing your request:\n\n{e}")

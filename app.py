@@ -23,55 +23,43 @@ df["Start Date"] = pd.to_datetime(df["Start Date"], errors='coerce')
 df["End Date"] = pd.to_datetime(df["End Date"], errors='coerce')
 df["Target Date"] = pd.to_datetime(df["Target Date"], errors='coerce')
 
-# ---------------- FILTER SECTION (Weekly Blocks) ----------------
+# ---------------- FILTER SECTION ----------------
 st.sidebar.header("📂 Filters")
 
-# Get min/max dates
-min_date = df["Start Date"].min()
-max_date = df["Start Date"].max()
+# 📅 Date range filter — defaults to full range
+start_date, end_date = st.sidebar.date_input(
+    "Select Week (Monday to Sunday)",
+    [df["Start Date"].min(), df["Start Date"].min() + pd.Timedelta(days=6)]
+)
 
-# Create weekly blocks (Monday–Sunday)
-week_ranges = pd.date_range(start=min_date, end=max_date, freq='W-MON')
-weekly_options = []
+# Ensure proper conversion to datetime
+start_date = pd.to_datetime(start_date)
+end_date = pd.to_datetime(end_date)
 
-for i in range(len(week_ranges) - 1):
-    start = week_ranges[i]
-    end = week_ranges[i + 1] - pd.Timedelta(days=1)
-    label = f"{start.strftime('%Y-%m-%d')} to {end.strftime('%Y-%m-%d')}"
-    weekly_options.append((label, start, end))
+# Convert selected week into list of "Report Date" format
+selected_labels = pd.date_range(start=start_date, end=end_date).strftime("%d-%b").tolist()
 
-# Show weekly range as dropdown
-selected_week = st.sidebar.selectbox("📅 Select Week", [label for label, _, _ in weekly_options])
+# Filter full data set by selected dates
+filtered_df = df[(df["Start Date"] >= start_date) & (df["Start Date"] <= end_date)]
 
-# Get selected week’s start and end dates
-for label, start, end in weekly_options:
-    if label == selected_week:
-        selected_start, selected_end = start, end
-        break
-
-# Filter df based on selected week
-filtered_df = df[(df["Start Date"] >= selected_start) & (df["Start Date"] <= selected_end)]
-
-# Portfolio filter (if column exists)
+# 📁 Portfolio filter
 if "Portfolio" in df.columns:
-    portfolios = st.sidebar.multiselect("Filter by Portfolio", options=sorted(df["Portfolio"].dropna().unique()))
+    portfolios = st.sidebar.multiselect("Filter by Portfolio", sorted(df["Portfolio"].dropna().unique()))
     if portfolios:
         filtered_df = filtered_df[filtered_df["Portfolio"].isin(portfolios)]
 
-# Source filter (optional)
+# 🎯 Source filter
 if "Source" in df.columns:
-    sources = st.sidebar.multiselect("Filter by Source", options=sorted(df["Source"].dropna().unique()))
+    sources = st.sidebar.multiselect("Filter by Source", sorted(df["Source"].dropna().unique()))
     if sources:
         filtered_df = filtered_df[filtered_df["Source"].isin(sources)]
 
-# No data warning
+# ⚠️ Handle empty data
 if filtered_df.empty:
     st.warning("⚠️ No data matches the selected filters.")
     st.stop()
 
-# ----------------------------------------------
-# ✅ KPI CALCULATION ON FILTERED DATA
-# ----------------------------------------------
+# ---------------- KPI RE-CALCULATION ----------------
 min_date = filtered_df["Start Date"].min()
 max_date = max(filtered_df["Start Date"].max(), filtered_df["End Date"].max(), filtered_df["Target Date"].max())
 date_range = pd.date_range(start=min_date, end=max_date)
@@ -88,16 +76,24 @@ for report_date in date_range:
     cases_complete = complete_today.shape[0]
     complete_within_sla = complete_today[complete_today["End Date"] < complete_today["Target Date"]].shape[0]
     complete_within_sla_pct = f"{int(round((complete_within_sla / cases_complete * 100)))}%" if cases_complete > 0 else "0%"
-    backlog_over_sla = filtered_df[(filtered_df["Start Date"] <= report_date) & (filtered_df["End Date"].isna()) & (filtered_df["Target Date"] < report_date)].shape[0]
+    backlog_over_sla = filtered_df[
+        (filtered_df["Start Date"] <= report_date) &
+        (filtered_df["End Date"].isna()) &
+        (filtered_df["Target Date"] < report_date)
+    ].shape[0]
     backlog_pct = f"{int(round((backlog_over_sla / prev_closing_wip * 100)))}%" if prev_closing_wip > 0 else "0%"
-    wip_in_sla = filtered_df[(filtered_df["Start Date"] <= report_date) & (filtered_df["End Date"].isna()) & (filtered_df["Target Date"] >= report_date)].shape[0]
+    wip_in_sla = filtered_df[
+        (filtered_df["Start Date"] <= report_date) &
+        (filtered_df["End Date"].isna()) &
+        (filtered_df["Target Date"] >= report_date)
+    ].shape[0]
     closing_wip = opening_wip + cases_received - cases_complete
     wip_in_sla_pct = f"{int(round((wip_in_sla / closing_wip * 100)))}%" if closing_wip > 0 else "0%"
 
     pend_subset = filtered_df[filtered_df["Start Date"] <= report_date]
     pend_total = pend_subset["Pend Case"].notna().sum()
     pend_yes = pend_subset[pend_subset["Pend Case"].astype(str).str.lower() == "yes"].shape[0]
-    pend_rate_val = int(round((pend_yes / pend_total) * 100)) if pend_total > 0 else 0
+    pend_rate_val = int(round((pend_yes / pend_total * 100))) if pend_total > 0 else 0
     pend_rate = f"{pend_rate_val}%"
 
     pend_rate_values.append(pend_rate_val)
@@ -119,7 +115,7 @@ for report_date in date_range:
 
     prev_closing_wip = closing_wip
 
-# ✅ Set filtered KPI dataframe
+# ✅ Use this filtered KPI dataset everywhere now
 kpi_df = pd.DataFrame(kpi_data)
 
 # ---------------- AI Insights Section ----------------

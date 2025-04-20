@@ -197,8 +197,8 @@ Output format:
 # ---------------- CHARTS SECTION ----------------
 st.markdown("## 📈 Operational Trends")
 
-# ✅ Auto-detect date range from filtered KPI data
-chart_df = kpi_df.copy()
+# ✅ Use only filtered KPI data within selected week
+chart_df = kpi_df[kpi_df["Report Date"].isin(selected_labels)]
 
 labels = list(chart_df["Report Date"])
 cases_received = list(chart_df["Cases Received"])
@@ -266,4 +266,4 @@ with col4:
 
 # ---------------- KPI Table ----------------
 st.subheader("📋 KPI Table")
-st.dataframe(kpi_df, use_container_width=True)
+st.dataframe(chart_df, use_container_width=True)

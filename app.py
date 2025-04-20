@@ -270,32 +270,36 @@ st.dataframe(chart_df, use_container_width=True)
 
 # ---------------- AI CHATBOT SECTION ----------------
 st.markdown("## 🤖 Ask the AI Chatbot")
-st.info("Ask me anything about the operational data — trends, pend rates, SLA issues, etc.")
+st.info("Ask me anything about the full operational data — trends, pend rates, SLA issues, etc.")
 
 from openai import OpenAI
 client = OpenAI(api_key=st.secrets["openai_key"])
 
-# Limit preview to first 30 rows to stay within token limits
-df_preview = df.head(30)
+# Make sure we use the unfiltered, original full dataset
+# Assuming it's still available as 'raw_df' or just reload it
+file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
+file_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+raw_df = pd.read_csv(file_url, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
+
+# Limit preview to first 30 rows to avoid token overflow
+df_preview = raw_df.head(30)
 
 try:
     df_markdown = df_preview.to_markdown(index=False)
 except Exception:
     df_markdown = df_preview.to_string(index=False)
 
-chat_query = st.text_area("💬 Ask a question to the AI about the data:")
+# Chat input with Enter to submit
+chat_query = st.chat_input("Ask a question about the data:")
 
-if st.button("Ask"):
-    if not chat_query.strip():
-        st.warning("Please enter a question.")
-    else:
-        with st.spinner("Thinking..."):
-            try:
-                response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",  # Stay within token limits
-                    messages=[
-                        {"role": "system", "content": "You are a helpful data analyst reviewing operational performance data from a back office team. Use the table to help answer user questions."},
-                        {"role": "user", "content": f"""Here is a preview of the operational data:
+if chat_query:
+    with st.spinner("Thinking..."):
+        try:
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",  # You can switch to gpt-4 if needed
+                messages=[
+                    {"role": "system", "content": "You are a helpful data analyst reviewing operational performance data from a back office team. Use the data table to help answer user questions."},
+                    {"role": "user", "content": f"""Here is a preview of the operational data:
 
 {df_markdown}
 
@@ -303,10 +307,10 @@ Now answer this question about the data:
 
 {chat_query}
 """}
-                    ],
-                    temperature=0.5
-                )
-                st.success("✅ AI's Response:")
-                st.markdown(response.choices[0].message.content)
-            except Exception as e:
-                st.error(f"❌ An error occurred:\n\n{e}")
+                ],
+                temperature=0.5
+            )
+            st.success("✅ AI's Response:")
+            st.markdown(response.choices[0].message.content)
+        except Exception as e:
+            st.error(f"❌ An error occurred:\n\n{e}")

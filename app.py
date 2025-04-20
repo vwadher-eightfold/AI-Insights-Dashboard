@@ -315,3 +315,5 @@ Respond below:
         )
 
         st.markdown(response.choices[0].message.content)
+except openai.RateLimitError:
+    st.error("⚠️ OpenAI rate limit reached. Please wait a bit or check your API usage.")

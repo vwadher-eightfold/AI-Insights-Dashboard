@@ -308,11 +308,10 @@ summary_text = f"""
 """
 
 # Input box for user query
-user_question = st.text_input("Ask anything about the full dataset:", placeholder="e.g. What’s the average pend rate in Jan?", key="chat_input")
+user_question = st.text_input(placeholder="e.g. What’s the average pend rate in Jan?", key="chat_input")
 
 # Enable Enter key to trigger submission
-submit = st.button("Ask")
-if user_question and submit:
+if user_question:
     with st.spinner("Analyzing your question..."):
         from openai import OpenAI
         client = OpenAI(api_key=st.secrets["openai_key"])

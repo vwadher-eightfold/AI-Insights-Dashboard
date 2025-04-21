@@ -268,63 +268,61 @@ with col4:
 st.subheader("📋 KPI Table")
 st.dataframe(chart_df, use_container_width=True)
 
-# ---------------- AI CHATBOT SECTION (Enter-only) ----------------
+# ---------------- FINAL AI CHATBOT SECTION ----------------
 import textwrap
 
-st.markdown("## 🤖 Ask your Data")
+st.markdown("## 🤖 Ask your Data (Full Dataset Chatbot)")
 
-# Load full dataset (no filters)
+# 🔁 Reload full unfiltered dataset
 file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
 file_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-raw_df = pd.read_csv(file_url, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
+full_df = pd.read_csv(file_url, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
 
-# Summarize for efficient input
-summary_text = f"""
-📊 Dataset Summary:
+# 🔍 Show only a preview in prompt
+df_preview = full_df.head(300)  # limit for token safety
+try:
+    df_markdown = df_preview.to_markdown(index=False)
+except Exception:
+    df_markdown = df_preview.head(5).to_string(index=False)
 
-- Rows: {raw_df.shape[0]}
-- Columns: {raw_df.shape[1]}
-- Fields: {', '.join(raw_df.columns)}
-
-📈 Basic Statistics:
-{raw_df.describe(include='all').fillna('-').to_string()}
-"""
-
-# Input with form to trigger on Enter
+# ---------------- ENTER-ONLY CHAT FORM ----------------
 with st.form(key="chat_form"):
-    user_question = st.text_input("Ask anything about the full dataset:", placeholder="e.g. What’s the SLA trend in Jan?")
-    submitted = st.form_submit_button("Submit")  # ← will trigger on Enter
+    user_input = st.text_input("Ask a question about the full dataset (e.g. trends, issues, KPIs)", placeholder="Type and press Enter...")
+    submitted = st.form_submit_button("Ask")
 
-if submitted and user_question:
-    with st.spinner("Analyzing your question..."):
+if submitted and user_input:
+    with st.spinner("Generating your response..."):
         from openai import OpenAI
         client = OpenAI(api_key=st.secrets["openai_key"])
 
         prompt = textwrap.dedent(f"""
-        You are an expert operational analyst. You will receive:
+        You are a senior operations analyst helping business users understand performance trends from back-office data.
 
-        1. A summarized dataset with statistics.
-        2. A user question about the data.
+        Below is a preview sample of the dataset (300 rows):
 
-        Your task is to respond clearly and concisely based on the data provided. Use bullet points if possible and include actual figures when relevant.
+        ```
+        {df_markdown}
+        ```
 
-        --- DATA SUMMARY ---
-        {summary_text}
+        The user has asked:
 
-        --- USER QUESTION ---
-        {user_question}
+        "{user_input}"
 
-        Answer:
+        Please answer the question with clear, relevant insights.
+        - Use bullet points if helpful
+        - Include actual values or metrics when appropriate
+        - Keep it concise and professional
+        - DO NOT make up data beyond the sample shown
         """)
 
         try:
             response = client.chat.completions.create(
-                model="gpt-3.5-turbo",  # Switch to "gpt-4" if needed
+                model="gpt-4",  # Change to "gpt-3.5-turbo" if needed
                 messages=[
-                    {"role": "system", "content": "You are a helpful analyst trained in data storytelling."},
+                    {"role": "system", "content": "You are an expert in operations analytics."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.5
+                temperature=0.4
             )
             reply = response.choices[0].message.content
             st.markdown(reply)

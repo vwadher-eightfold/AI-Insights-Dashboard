@@ -308,7 +308,7 @@ summary_text = f"""
 """
 
 # Input box for user query
-user_question = st.text_input(placeholder="e.g. What’s the average pend rate in Jan?", key="chat_input")
+user_question = st.text_input("", placeholder="e.g. What’s the average pend rate in Jan?", key="chat_input")
 
 # Enable Enter key to trigger submission
 if user_question:

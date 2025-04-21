@@ -268,17 +268,17 @@ with col4:
 st.subheader("📋 KPI Table")
 st.dataframe(chart_df, use_container_width=True)
 
-# ---------------- AI CHATBOT SECTION ----------------
+# ---------------- AI CHATBOT SECTION (Enter-only) ----------------
 import textwrap
 
 st.markdown("## 🤖 Ask your Data")
 
-# Load and prepare a clean full version of the dataset (used only by chatbot)
+# Load full dataset (no filters)
 file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
 file_url = f"https://drive.google.com/uc?export=download&id={file_id}"
 raw_df = pd.read_csv(file_url, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
 
-# Summarize dataset for chatbot input
+# Summarize for efficient input
 summary_text = f"""
 📊 Dataset Summary:
 
@@ -290,12 +290,12 @@ summary_text = f"""
 {raw_df.describe(include='all').fillna('-').to_string()}
 """
 
-# Input box for user query
-user_question = st.text_input("Ask anything about the full dataset:", placeholder="e.g. What’s the average pend rate in Jan?", key="chat_input")
+# Input with form to trigger on Enter
+with st.form(key="chat_form"):
+    user_question = st.text_input("Ask anything about the full dataset:", placeholder="e.g. What’s the SLA trend in Jan?")
+    submitted = st.form_submit_button("Submit")  # ← will trigger on Enter
 
-# Enable Enter key to trigger submission
-submit = st.button("Ask")
-if user_question and submit:
+if submitted and user_question:
     with st.spinner("Analyzing your question..."):
         from openai import OpenAI
         client = OpenAI(api_key=st.secrets["openai_key"])
@@ -319,7 +319,7 @@ if user_question and submit:
 
         try:
             response = client.chat.completions.create(
-                model="gpt-3.5-turbo",  # You can switch to "gpt-4" if needed
+                model="gpt-3.5-turbo",  # Switch to "gpt-4" if needed
                 messages=[
                     {"role": "system", "content": "You are a helpful analyst trained in data storytelling."},
                     {"role": "user", "content": prompt}

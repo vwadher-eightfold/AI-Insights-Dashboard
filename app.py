@@ -11,7 +11,7 @@ st.title("📊 BackOffice Operations Dashboard with AI Insights")
 
 # ---------------- Load CSV from Google Drive ----------------
 file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
-file_url = fhttps://drive.google.com/uc?export=download&id={file_id}
+file_url = f"https://drive.google.com/uc?export=download&id={file_id}"
 
 try:
     df = pd.read_csv(file_url, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])

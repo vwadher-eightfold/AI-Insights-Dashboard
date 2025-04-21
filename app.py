@@ -36,7 +36,7 @@ def generate_vector_store(dataframe):
     embeddings = []
 
     # ⚠️ Sample or limit rows for performance
-    for _, row in dataframe.head(100).iterrows():
+    for _, row in dataframe.iterrows():
         row_text = ", ".join([f"{col}: {row[col]}" for col in dataframe.columns])
         try:
             response = client.embeddings.create(

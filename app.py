@@ -35,7 +35,7 @@ def generate_vector_store(dataframe):
     texts = []
     embeddings = []
 
-    for _, row in dataframe.iterrows():
+    for _, row in dataframe.head(50).iterrows():
         row_text = ", ".join([f"{col}: {row[col]}" for col in dataframe.columns])
         try:
             response = client.embeddings.create(

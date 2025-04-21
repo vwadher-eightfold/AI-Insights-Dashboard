@@ -23,10 +23,10 @@ df["Start Date"] = pd.to_datetime(df["Start Date"], errors='coerce')
 df["End Date"] = pd.to_datetime(df["End Date"], errors='coerce')
 df["Target Date"] = pd.to_datetime(df["Target Date"], errors='coerce')
 
-# ✅ NEW: FAISS Vector Embedding Setup
 import numpy as np
 import faiss
 
+# ✅ Build vector store from full df (not filtered_df)
 @st.cache_data(show_spinner=False)
 def generate_vector_store(dataframe):
     from openai import OpenAI
@@ -35,7 +35,8 @@ def generate_vector_store(dataframe):
     texts = []
     embeddings = []
 
-    for _, row in dataframe.head(50).iterrows():
+    # ⚠️ Sample or limit rows for performance
+    for _, row in dataframe.head(100).iterrows():
         row_text = ", ".join([f"{col}: {row[col]}" for col in dataframe.columns])
         try:
             response = client.embeddings.create(
@@ -50,10 +51,9 @@ def generate_vector_store(dataframe):
 
     index = faiss.IndexFlatL2(len(embeddings[0]))
     index.add(np.array(embeddings).astype("float32"))
-
     return index, texts
 
-# ✅ Load vector store (only once!)
+# ✅ Build it once — always from df (not filtered_df!)
 vector_index, row_texts = generate_vector_store(df)
 
 # ---------------- FILTER SECTION ----------------
@@ -318,43 +318,49 @@ try:
 except Exception:
     df_markdown = df_preview.head(5).to_string(index=False)
 
-# ---------------- AI CHATBOT SECTION ----------------
-import textwrap
+# ---------------- Chatbot Section ----------------
+st.markdown("### 💬 Ask Anything About the Full Dataset")
 
-st.subheader("💬 Ask your Data")
+query = st.text_input("Ask a question:", placeholder="E.g. What was the average SLA % in February?")
 
-user_question = st.text_input("Ask a question about your data", key="chat_input")
+if query:
+    with st.spinner("Thinking..."):
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=st.secrets["openai_key"])
 
-if user_question:
-    from openai import OpenAI
-    client = OpenAI(api_key=st.secrets["openai_key"])
+            # Create embedding for the query
+            query_embedding = client.embeddings.create(
+                input=query,
+                model="text-embedding-ada-002"
+            ).data[0].embedding
 
-    # Get query embedding
-    q_embed = client.embeddings.create(input=user_question, model="text-embedding-ada-002").data[0].embedding
-    q_np = np.array(q_embed).astype("float32").reshape(1, -1)
+            # Search similar rows
+            D, I = vector_index.search(np.array([query_embedding]).astype("float32"), k=5)
+            matched_context = "\n\n".join([row_texts[i] for i in I[0]])
 
-    # Search top 5 matching rows
-    D, I = vector_index.search(q_np, k=5)
-    top_matches = [row_texts[i] for i in I[0]]
+            # Send to GPT
+            chat_prompt = f"""
+You are an operations analyst AI. Use the data below to answer the question:
 
-    # Build context for GPT
-    context = "\n".join(top_matches)
+Data:
+{matched_context}
 
-    prompt = f"""
-You are an operations analyst reviewing this data:
-{context}
+Question:
+{query}
 
-Question: {user_question}
-Answer in bullet points with clear, data-based reasoning.
+Respond clearly and concisely with metrics if available.
 """
 
-    with st.spinner("Thinking..."):
-        response = client.chat.completions.create(
-            model="gpt-4",  # or gpt-3.5-turbo
-            messages=[
-                {"role": "system", "content": "You're a data analyst that provides sharp, concise, and data-backed insights."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3
-        )
-        st.markdown(response.choices[0].message.content)
+            response = client.chat.completions.create(
+                model="gpt-4",  # or "gpt-3.5-turbo" for lower usage
+                messages=[
+                    {"role": "system", "content": "You are a helpful operations analyst."},
+                    {"role": "user", "content": chat_prompt}
+                ]
+            )
+
+            st.markdown(response.choices[0].message.content)
+
+        except Exception as e:
+            st.error(f"❌ Error: {e}")

@@ -23,6 +23,39 @@ df["Start Date"] = pd.to_datetime(df["Start Date"], errors='coerce')
 df["End Date"] = pd.to_datetime(df["End Date"], errors='coerce')
 df["Target Date"] = pd.to_datetime(df["Target Date"], errors='coerce')
 
+# ✅ NEW: FAISS Vector Embedding Setup
+import numpy as np
+import faiss
+
+@st.cache_data(show_spinner=False)
+def generate_vector_store(dataframe):
+    from openai import OpenAI
+    client = OpenAI(api_key=st.secrets["openai_key"])
+
+    texts = []
+    embeddings = []
+
+    for _, row in dataframe.iterrows():
+        row_text = ", ".join([f"{col}: {row[col]}" for col in dataframe.columns])
+        try:
+            response = client.embeddings.create(
+                input=row_text,
+                model="text-embedding-ada-002"
+            )
+            emb = response.data[0].embedding
+            texts.append(row_text)
+            embeddings.append(emb)
+        except Exception as e:
+            continue
+
+    index = faiss.IndexFlatL2(len(embeddings[0]))
+    index.add(np.array(embeddings).astype("float32"))
+
+    return index, texts
+
+# ✅ Load vector store (only once!)
+vector_index, row_texts = generate_vector_store(df)
+
 # ---------------- FILTER SECTION ----------------
 st.sidebar.header("📂 Filters")
 
@@ -288,62 +321,40 @@ except Exception:
 # ---------------- AI CHATBOT SECTION ----------------
 import textwrap
 
-st.markdown("## 🤖 Ask your Data")
+st.subheader("💬 Ask your Data")
 
-# Load and prepare a clean full version of the dataset (used only by chatbot)
-file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
-file_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-raw_df = pd.read_csv(file_url, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
+user_question = st.text_input("Ask a question about your data", key="chat_input")
 
-# Summarize dataset for chatbot input
-summary_text = f"""
-📊 Dataset Summary:
+if user_question:
+    from openai import OpenAI
+    client = OpenAI(api_key=st.secrets["openai_key"])
 
-- Rows: {raw_df.shape[0]}
-- Columns: {raw_df.shape[1]}
-- Fields: {', '.join(raw_df.columns)}
+    # Get query embedding
+    q_embed = client.embeddings.create(input=user_question, model="text-embedding-ada-002").data[0].embedding
+    q_np = np.array(q_embed).astype("float32").reshape(1, -1)
 
-📈 Basic Statistics:
-{raw_df.describe(include='all').fillna('-').to_string()}
+    # Search top 5 matching rows
+    D, I = vector_index.search(q_np, k=5)
+    top_matches = [row_texts[i] for i in I[0]]
+
+    # Build context for GPT
+    context = "\n".join(top_matches)
+
+    prompt = f"""
+You are an operations analyst reviewing this data:
+{context}
+
+Question: {user_question}
+Answer in bullet points with clear, data-based reasoning.
 """
 
-# Input box for user query
-user_question = st.text_input("Ask anything about the full dataset:", placeholder="e.g. What’s the average pend rate in Jan?", key="chat_input")
-
-# Enable Enter key to trigger submission
-submit = st.button("Ask")
-if user_question and submit:
-    with st.spinner("Analyzing your question..."):
-        from openai import OpenAI
-        client = OpenAI(api_key=st.secrets["openai_key"])
-
-        prompt = textwrap.dedent(f"""
-        You are an expert operational analyst. You will receive:
-
-        1. A summarized dataset with statistics.
-        2. A user question about the data.
-
-        Your task is to respond clearly and concisely based on the data provided. Use bullet points if possible and include actual figures when relevant.
-
-        --- DATA SUMMARY ---
-        {summary_text}
-
-        --- USER QUESTION ---
-        {user_question}
-
-        Answer:
-        """)
-
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4",  # You can switch to "gpt-3.5-turbo" if needed
-                messages=[
-                    {"role": "system", "content": "You are a helpful analyst trained in data storytelling."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.5
-            )
-            reply = response.choices[0].message.content
-            st.markdown(reply)
-        except Exception as e:
-            st.error(f"❌ Error: {e}")
+    with st.spinner("Thinking..."):
+        response = client.chat.completions.create(
+            model="gpt-4",  # or gpt-3.5-turbo
+            messages=[
+                {"role": "system", "content": "You're a data analyst that provides sharp, concise, and data-backed insights."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3
+        )
+        st.markdown(response.choices[0].message.content)

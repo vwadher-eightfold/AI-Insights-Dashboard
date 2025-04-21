@@ -275,7 +275,7 @@ st.markdown("## 🤖 Ask your Data (Full Dataset Chatbot)")
 
 # 🔁 Reload full unfiltered dataset
 file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
-file_url = fhttps://drive.google.com/uc?export=download&id={file_id}
+file_url = f"https://drive.google.com/uc?export=download&id={file_id}"
 full_df = pd.read_csv(file_url, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
 
 # 🔍 Show limited preview for prompt context (lowered to reduce token load)
@@ -292,7 +292,7 @@ st.markdown("## 🤖 Ask your Data")
 
 # Load and prepare a clean full version of the dataset (used only by chatbot)
 file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
-file_url = fhttps://drive.google.com/uc?export=download&id={file_id}
+file_url = f"https://drive.google.com/uc?export=download&id={file_id}"
 raw_df = pd.read_csv(file_url, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
 
 # Summarize dataset for chatbot input

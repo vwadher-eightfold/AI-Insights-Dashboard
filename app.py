@@ -269,48 +269,64 @@ st.subheader("📋 KPI Table")
 st.dataframe(chart_df, use_container_width=True)
 
 # ---------------- AI CHATBOT SECTION ----------------
-st.markdown("## 🤖 Ask the AI Chatbot")
-st.info("Ask me anything about the full operational data — trends, pend rates, SLA issues, etc.")
+import textwrap
 
-from openai import OpenAI
-client = OpenAI(api_key=st.secrets["openai_key"])
+st.markdown("## 🤖 Ask your Data")
 
-# Make sure we use the unfiltered, original full dataset
-# Assuming it's still available as 'raw_df' or just reload it
+# Load and prepare a clean full version of the dataset (used only by chatbot)
 file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
 file_url = f"https://drive.google.com/uc?export=download&id={file_id}"
 raw_df = pd.read_csv(file_url, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
 
-# Limit preview to first 30 rows to avoid token overflow
-df_preview = raw_df.head(30)
+# Summarize dataset for chatbot input
+summary_text = f"""
+📊 Dataset Summary:
 
-try:
-    df_markdown = df_preview.to_markdown(index=False)
-except Exception:
-    df_markdown = df_preview.to_string(index=False)
+- Rows: {raw_df.shape[0]}
+- Columns: {raw_df.shape[1]}
+- Fields: {', '.join(raw_df.columns)}
 
-# Chat input with Enter to submit
-chat_query = st.chat_input("Ask a question about the data:")
+📈 Basic Statistics:
+{raw_df.describe(include='all').fillna('-').to_string()}
+"""
 
-if chat_query:
-    with st.spinner("Thinking..."):
+# Input box for user query
+user_question = st.text_input("Ask anything about the full dataset:", placeholder="e.g. What’s the average pend rate in Jan?", key="chat_input")
+
+# Enable Enter key to trigger submission
+submit = st.button("Ask")
+if user_question and submit:
+    with st.spinner("Analyzing your question..."):
+        from openai import OpenAI
+        client = OpenAI(api_key=st.secrets["openai_key"])
+
+        prompt = textwrap.dedent(f"""
+        You are an expert operational analyst. You will receive:
+
+        1. A summarized dataset with statistics.
+        2. A user question about the data.
+
+        Your task is to respond clearly and concisely based on the data provided. Use bullet points if possible and include actual figures when relevant.
+
+        --- DATA SUMMARY ---
+        {summary_text}
+
+        --- USER QUESTION ---
+        {user_question}
+
+        Answer:
+        """)
+
         try:
             response = client.chat.completions.create(
-                model="gpt-3.5-turbo",  # You can switch to gpt-4 if needed
+                model="gpt-3.5-turbo",  # You can switch to "gpt-4" if needed
                 messages=[
-                    {"role": "system", "content": "You are a helpful data analyst reviewing operational performance data from a back office team. Use the data table to help answer user questions."},
-                    {"role": "user", "content": f"""Here is a preview of the operational data:
-
-{df_markdown}
-
-Now answer this question about the data:
-
-{chat_query}
-"""}
+                    {"role": "system", "content": "You are a helpful analyst trained in data storytelling."},
+                    {"role": "user", "content": prompt}
                 ],
                 temperature=0.5
             )
-            st.success("✅ AI's Response:")
-            st.markdown(response.choices[0].message.content)
+            reply = response.choices[0].message.content
+            st.markdown(reply)
         except Exception as e:
-            st.error(f"❌ An error occurred:\n\n{e}")
+            st.error(f"❌ Error: {e}")

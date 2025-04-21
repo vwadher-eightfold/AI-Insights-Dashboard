@@ -336,7 +336,7 @@ if user_question and submit:
 
         try:
             response = client.chat.completions.create(
-                model="gpt-3.5-turbo",  # You can switch to "gpt-4" if needed
+                model="gpt-4",  # You can switch to "gpt-3.5-turbo" if needed
                 messages=[
                     {"role": "system", "content": "You are a helpful analyst trained in data storytelling."},
                     {"role": "user", "content": prompt}

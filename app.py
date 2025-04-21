@@ -285,44 +285,63 @@ try:
 except Exception:
     df_markdown = df_preview.head(5).to_string(index=False)
 
-# ---------------- ENTER-ONLY CHAT FORM ----------------
-with st.form(key="chat_form"):
-    user_input = st.text_input("Ask a question about the full dataset (e.g. trends, issues, KPIs)", placeholder="Type and press Enter...")
-    submitted = st.form_submit_button("Ask")
+# ---------------- AI CHATBOT SECTION ----------------
+import textwrap
 
-if submitted and user_input:
-    with st.spinner("Generating your response..."):
+st.markdown("## 🤖 Ask your Data")
+
+# Load and prepare a clean full version of the dataset (used only by chatbot)
+file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
+file_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+raw_df = pd.read_csv(file_url, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
+
+# Summarize dataset for chatbot input
+summary_text = f"""
+📊 Dataset Summary:
+
+- Rows: {raw_df.shape[0]}
+- Columns: {raw_df.shape[1]}
+- Fields: {', '.join(raw_df.columns)}
+
+📈 Basic Statistics:
+{raw_df.describe(include='all').fillna('-').to_string()}
+"""
+
+# Input box for user query
+user_question = st.text_input("Ask anything about the full dataset:", placeholder="e.g. What’s the average pend rate in Jan?", key="chat_input")
+
+# Enable Enter key to trigger submission
+submit = st.button("Ask")
+if user_question and submit:
+    with st.spinner("Analyzing your question..."):
         from openai import OpenAI
         client = OpenAI(api_key=st.secrets["openai_key"])
 
         prompt = textwrap.dedent(f"""
-        You are a senior operations analyst helping business users understand performance trends from back-office data.
+        You are an expert operational analyst. You will receive:
 
-        Below is a preview sample of the dataset (first 50 rows):
+        1. A summarized dataset with statistics.
+        2. A user question about the data.
 
-        ```
-        {df_markdown}
-        ```
+        Your task is to respond clearly and concisely based on the data provided. Use bullet points if possible and include actual figures when relevant.
 
-        The user has asked:
+        --- DATA SUMMARY ---
+        {summary_text}
 
-        "{user_input}"
+        --- USER QUESTION ---
+        {user_question}
 
-        Please answer the question with clear, relevant insights.
-        - Use bullet points if helpful
-        - Include actual values or metrics when appropriate
-        - Keep it concise and professional
-        - DO NOT make up data beyond the sample shown
+        Answer:
         """)
 
         try:
             response = client.chat.completions.create(
-                model="gpt-4",  # or switch to gpt-3.5-turbo for lighter usage
+                model="gpt-3.5-turbo",  # You can switch to "gpt-4" if needed
                 messages=[
-                    {"role": "system", "content": "You are an expert in operations analytics."},
+                    {"role": "system", "content": "You are a helpful analyst trained in data storytelling."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.4
+                temperature=0.5
             )
             reply = response.choices[0].message.content
             st.markdown(reply)

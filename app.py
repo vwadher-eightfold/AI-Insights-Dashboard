@@ -11,7 +11,7 @@ st.title("📊 BackOffice Operations Dashboard with AI Insights")
 
 # ---------------- Load CSV from Google Drive ----------------
 file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
-file_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+file_url = fhttps://drive.google.com/uc?export=download&id={file_id}
 
 try:
     df = pd.read_csv(file_url, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
@@ -22,39 +22,6 @@ except Exception as e:
 df["Start Date"] = pd.to_datetime(df["Start Date"], errors='coerce')
 df["End Date"] = pd.to_datetime(df["End Date"], errors='coerce')
 df["Target Date"] = pd.to_datetime(df["Target Date"], errors='coerce')
-
-import numpy as np
-import faiss
-
-# ✅ Build vector store from full df (not filtered_df)
-@st.cache_data(show_spinner=False)
-def generate_vector_store(dataframe):
-    from openai import OpenAI
-    client = OpenAI(api_key=st.secrets["openai_key"])
-
-    texts = []
-    embeddings = []
-
-    # ⚠️ Sample or limit rows for performance
-    for _, row in dataframe.iterrows():
-        row_text = ", ".join([f"{col}: {row[col]}" for col in dataframe.columns])
-        try:
-            response = client.embeddings.create(
-                input=row_text,
-                model="text-embedding-ada-002"
-            )
-            emb = response.data[0].embedding
-            texts.append(row_text)
-            embeddings.append(emb)
-        except Exception as e:
-            continue
-
-    index = faiss.IndexFlatL2(len(embeddings[0]))
-    index.add(np.array(embeddings).astype("float32"))
-    return index, texts
-
-# ✅ Build it once — always from df (not filtered_df!)
-vector_index, row_texts = generate_vector_store(df)
 
 # ---------------- FILTER SECTION ----------------
 st.sidebar.header("📂 Filters")
@@ -308,7 +275,7 @@ st.markdown("## 🤖 Ask your Data (Full Dataset Chatbot)")
 
 # 🔁 Reload full unfiltered dataset
 file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
-file_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+file_url = fhttps://drive.google.com/uc?export=download&id={file_id}
 full_df = pd.read_csv(file_url, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
 
 # 🔍 Show limited preview for prompt context (lowered to reduce token load)
@@ -318,49 +285,65 @@ try:
 except Exception:
     df_markdown = df_preview.head(5).to_string(index=False)
 
-# ---------------- Chatbot Section ----------------
-st.markdown("### 💬 Ask Anything About the Full Dataset")
+# ---------------- AI CHATBOT SECTION ----------------
+import textwrap
 
-query = st.text_input("Ask a question:", placeholder="E.g. What was the average SLA % in February?")
+st.markdown("## 🤖 Ask your Data")
 
-if query:
-    with st.spinner("Thinking..."):
-        try:
-            from openai import OpenAI
-            client = OpenAI(api_key=st.secrets["openai_key"])
+# Load and prepare a clean full version of the dataset (used only by chatbot)
+file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
+file_url = fhttps://drive.google.com/uc?export=download&id={file_id}
+raw_df = pd.read_csv(file_url, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
 
-            # Create embedding for the query
-            query_embedding = client.embeddings.create(
-                input=query,
-                model="text-embedding-ada-002"
-            ).data[0].embedding
+# Summarize dataset for chatbot input
+summary_text = f"""
+📊 Dataset Summary:
 
-            # Search similar rows
-            D, I = vector_index.search(np.array([query_embedding]).astype("float32"), k=5)
-            matched_context = "\n\n".join([row_texts[i] for i in I[0]])
+- Rows: {raw_df.shape[0]}
+- Columns: {raw_df.shape[1]}
+- Fields: {', '.join(raw_df.columns)}
 
-            # Send to GPT
-            chat_prompt = f"""
-You are an operations analyst AI. Use the data below to answer the question:
-
-Data:
-{matched_context}
-
-Question:
-{query}
-
-Respond clearly and concisely with metrics if available.
+📈 Basic Statistics:
+{raw_df.describe(include='all').fillna('-').to_string()}
 """
 
+# Input box for user query
+user_question = st.text_input("Ask anything about the full dataset:", placeholder="e.g. What’s the average pend rate in Jan?", key="chat_input")
+
+# Enable Enter key to trigger submission
+submit = st.button("Ask")
+if user_question and submit:
+    with st.spinner("Analyzing your question..."):
+        from openai import OpenAI
+        client = OpenAI(api_key=st.secrets["openai_key"])
+
+        prompt = textwrap.dedent(f"""
+        You are an expert operational analyst. You will receive:
+
+        1. A summarized dataset with statistics.
+        2. A user question about the data.
+
+        Your task is to respond clearly and concisely based on the data provided. Use bullet points if possible and include actual figures when relevant.
+
+        --- DATA SUMMARY ---
+        {summary_text}
+
+        --- USER QUESTION ---
+        {user_question}
+
+        Answer:
+        """)
+
+        try:
             response = client.chat.completions.create(
-                model="gpt-4",  # or "gpt-3.5-turbo" for lower usage
+                model="gpt-4",  # You can switch to "gpt-3.5-turbo" if needed
                 messages=[
-                    {"role": "system", "content": "You are a helpful operations analyst."},
-                    {"role": "user", "content": chat_prompt}
-                ]
+                    {"role": "system", "content": "You are a helpful analyst trained in data storytelling."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.5
             )
-
-            st.markdown(response.choices[0].message.content)
-
+            reply = response.choices[0].message.content
+            st.markdown(reply)
         except Exception as e:
             st.error(f"❌ Error: {e}")

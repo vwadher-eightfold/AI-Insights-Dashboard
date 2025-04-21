@@ -278,8 +278,8 @@ file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
 file_url = f"https://drive.google.com/uc?export=download&id={file_id}"
 full_df = pd.read_csv(file_url, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
 
-# 🔍 Show only a preview in prompt
-df_preview = full_df.head(300)  # limit for token safety
+# 🔍 Show limited preview for prompt context (lowered to reduce token load)
+df_preview = full_df.head(50)  # 🔁 Reduced from 300 to 50 rows
 try:
     df_markdown = df_preview.to_markdown(index=False)
 except Exception:
@@ -298,7 +298,7 @@ if submitted and user_input:
         prompt = textwrap.dedent(f"""
         You are a senior operations analyst helping business users understand performance trends from back-office data.
 
-        Below is a preview sample of the dataset (300 rows):
+        Below is a preview sample of the dataset (first 50 rows):
 
         ```
         {df_markdown}
@@ -317,7 +317,7 @@ if submitted and user_input:
 
         try:
             response = client.chat.completions.create(
-                model="gpt-4",  # Change to "gpt-3.5-turbo" if needed
+                model="gpt-4",  # or switch to gpt-3.5-turbo for lighter usage
                 messages=[
                     {"role": "system", "content": "You are an expert in operations analytics."},
                     {"role": "user", "content": prompt}

@@ -268,27 +268,10 @@ with col4:
 st.subheader("📋 KPI Table")
 st.dataframe(chart_df, use_container_width=True)
 
-# ---------------- FINAL AI CHATBOT SECTION ----------------
-import textwrap
-
-st.markdown("## 🤖 Ask your Data (Full Dataset Chatbot)")
-
-# 🔁 Reload full unfiltered dataset
-file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
-file_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-full_df = pd.read_csv(file_url, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
-
-# 🔍 Show limited preview for prompt context (lowered to reduce token load)
-df_preview = full_df.head(50)  # 🔁 Reduced from 300 to 50 rows
-try:
-    df_markdown = df_preview.to_markdown(index=False)
-except Exception:
-    df_markdown = df_preview.head(5).to_string(index=False)
-
 # ---------------- AI CHATBOT SECTION ----------------
 import textwrap
 
-st.markdown("## 🤖 Ask your Data")
+st.markdown("## 👋✨ Meet Opsi — Your Smart Operations Assistant")
 
 # Load and prepare a clean full version of the dataset (used only by chatbot)
 file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"

@@ -280,12 +280,6 @@ raw_df = pd.read_csv(file_url, dayfirst=True, parse_dates=["Start Date", "End Da
 
 # Summarize dataset for chatbot input
 summary_text = f"""
-📊 Dataset Summary:
-
-- Rows: {raw_df.shape[0]}
-- Columns: {raw_df.shape[1]}
-- Fields: {', '.join(raw_df.columns)}
-
 📈 Basic Statistics:
 {raw_df.describe(include='all').fillna('-').to_string()}
 """
@@ -299,18 +293,18 @@ if user_question:
         from openai import OpenAI
         client = OpenAI(api_key=st.secrets["openai_key"])
 
-prompt = textwrap.dedent(f"""
-You are **Opsi**, an expert in operational analytics and performance reporting.
+        prompt = textwrap.dedent(f"""
+        You are **Opsi**, an expert in operational analytics and performance reporting.
 
-You will be given:
-1. A high-level summary of operational data (key statistics and patterns)
-2. A user's analytical question about trends, performance, or root causes.
+        You will be given:
+        1. A high-level summary of operational data (key statistics and patterns)
+        2. A user's analytical question about trends, performance, or root causes.
 
-Your job:
-- Answer concisely and insightfully using **actual metrics** (e.g. WIP, pend rate, SLA %)
-- Provide **clear explanations**, ideally in **bullet points**
-- Highlight **notable patterns** (spikes, declines, exceptions) and **root causes**
-- Be accurate, data-driven, and use **simple language** for non-technical users
+        Your job:
+        - Answer concisely and insightfully using **actual metrics** (e.g. WIP, pend rate, SLA %)
+        - Provide **clear explanations**, ideally in **bullet points**
+        - Highlight **notable patterns** (spikes, declines, exceptions) and **root causes**
+        - Be accurate, data-driven, and use **simple language** for non-technical users
 
         --- DATA SUMMARY ---
         {summary_text}
@@ -323,7 +317,7 @@ Your job:
 
         try:
             response = client.chat.completions.create(
-                model="gpt-4",  # You can switch to "gpt-3.5-turbo" if needed
+                model="gpt-4",  # or "gpt-3.5-turbo"
                 messages=[
                     {"role": "system", "content": "You are a helpful analyst trained in data storytelling."},
                     {"role": "user", "content": prompt}

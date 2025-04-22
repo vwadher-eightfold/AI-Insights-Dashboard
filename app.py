@@ -184,7 +184,7 @@ Output format:
 """
 
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are an expert in back-office operations and root cause analysis."},
                 {"role": "user", "content": story_prompt}
@@ -318,7 +318,7 @@ if user_question:
 
         try:
             response = client.chat.completions.create(
-                model="gpt-3.5-turbo",  # You can switch to "gpt-3.5-turbo" if needed
+                model="gpt-4",  # You can switch to "gpt-3.5-turbo" if needed
                 messages=[
                     {"role": "system", "content": "You are a helpful analyst trained in data storytelling."},
                     {"role": "user", "content": prompt}

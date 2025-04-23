@@ -10,26 +10,26 @@ st.set_page_config(page_title="📊 KPI AI Dashboard", layout="wide")
 st.title("📊 BackOffice Operations Dashboard with AI Insights")
 
 # ---------------- Load CSV from Google Drive ----------------
+import streamlit as st
+import pandas as pd
 import gdown
 import os
-import pandas as pd
-import streamlit as st
 
-# Google Drive file ID
+# File ID from Google Drive
 file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
 
-# Correct gdown format
+# Final gdown download URL
 gdown_url = f"https://drive.google.com/uc?id={file_id}"
 
-# Local file name
-csv_path = "data.csv"
+# Target file name (can be anything, but must match in read_csv)
+csv_path = "/tmp/data.csv"  # use /tmp for Streamlit Cloud compatibility
 
+# Download and load CSV
 try:
-    if not os.path.exists(csv_path):
-        gdown.download(gdown_url, csv_path, quiet=False, fuzzy=True)
+    if not os.path.isfile(csv_path):
+        gdown.download(gdown_url, csv_path, quiet=False)
 
     df = pd.read_csv(csv_path, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
-
 except Exception as e:
     st.error(f"❌ Failed to load CSV from Google Drive using gdown.\n\n**Error:** {e}")
     st.stop()

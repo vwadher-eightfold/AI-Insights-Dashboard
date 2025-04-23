@@ -277,10 +277,14 @@ import textwrap
 
 st.markdown("## 👋✨ Meet Opsi — Your Smart Operations Assistant")
 
-# Load and prepare a clean full version of the dataset (used only by chatbot)
-file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
-file_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-raw_df = pd.read_csv(file_url, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
+# ✅ Load the same CSV used for the dashboard from GitHub
+raw_url = "https://raw.githubusercontent.com/SwapnilGautama/AI-Insights-Dashboard/refs/heads/main/operational_data_full_jan_to_mar_2025.csv"
+
+try:
+    raw_df = pd.read_csv(raw_url, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
+except Exception as e:
+    st.error(f"❌ Failed to load data for chatbot (Opsi).\n\n**Error:** `{e}`")
+    st.stop()
 
 # Summarize dataset for chatbot input
 summary_text = f"""

@@ -15,12 +15,6 @@ import os
 import pandas as pd
 import streamlit as st
 
-# ---------------- CSV LOAD FROM GOOGLE DRIVE USING GDOWN ----------------
-import gdown
-import os
-import pandas as pd
-import streamlit as st
-
 # Google Drive file ID
 file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
 

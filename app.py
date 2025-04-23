@@ -5,18 +5,18 @@ from datetime import datetime
 import plotly.graph_objects as go
 import plotly.express as px
 from openai import OpenAI
+import textwrap
 
+# ---------------- PAGE SETUP ----------------
 st.set_page_config(page_title="📊 KPI AI Dashboard", layout="wide")
 st.title("📊 BackOffice Operations Dashboard with AI Insights")
 
-# ---------------- Load CSV from Google Drive ----------------
+# ---------------- LOAD DATA ----------------
 import streamlit as st
 import pandas as pd
 
-# ✅ Raw GitHub CSV URL
-csv_url = "https://raw.githubusercontent.com/SwapnilGautama/AI-Insights-Dashboard/refs/heads/main/operational_data_full_jan_to_mar_2025.csv"
+csv_url = "https://raw.githubusercontent.com/SwapnilGautama/ChatBot-Test/refs/heads/main/operational_data_full_jan_to_mar_2025.csv"
 
-# ✅ Load the CSV from GitHub
 try:
     df = pd.read_csv(csv_url, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
 except Exception as e:
@@ -27,43 +27,37 @@ df["Start Date"] = pd.to_datetime(df["Start Date"], errors='coerce')
 df["End Date"] = pd.to_datetime(df["End Date"], errors='coerce')
 df["Target Date"] = pd.to_datetime(df["Target Date"], errors='coerce')
 
-# ---------------- FILTER SECTION ----------------
+# ---------------- FILTERS ----------------
 st.sidebar.header("📂 Filters")
 
-# 📅 Date range filter — defaults to full range
 start_date, end_date = st.sidebar.date_input(
     "Select Week (Monday to Sunday)",
     [df["Start Date"].min(), df["Start Date"].min() + pd.Timedelta(days=6)]
 )
-
-# Ensure proper conversion to datetime
-start_date = pd.to_datetime(start_date)
-end_date = pd.to_datetime(end_date)
-
-# Convert selected week into list of "Report Date" format
+start_date, end_date = pd.to_datetime(start_date), pd.to_datetime(end_date)
 selected_labels = pd.date_range(start=start_date, end=end_date).strftime("%d-%b").tolist()
 
-# Filter full data set by selected dates
 filtered_df = df[(df["Start Date"] >= start_date) & (df["Start Date"] <= end_date)]
 
-# 📁 Portfolio filter
 if "Portfolio" in df.columns:
     portfolios = st.sidebar.multiselect("Filter by Portfolio", sorted(df["Portfolio"].dropna().unique()))
     if portfolios:
         filtered_df = filtered_df[filtered_df["Portfolio"].isin(portfolios)]
 
-# 🎯 Source filter
 if "Source" in df.columns:
     sources = st.sidebar.multiselect("Filter by Source", sorted(df["Source"].dropna().unique()))
     if sources:
         filtered_df = filtered_df[filtered_df["Source"].isin(sources)]
 
-# ⚠️ Handle empty data
 if filtered_df.empty:
     st.warning("⚠️ No data matches the selected filters.")
     st.stop()
 
-# ---------------- KPI RE-CALCULATION ----------------
+# ---------------- KPI CALCULATION ----------------
+df["WIP Days"] = (df["End Date"] - df["Start Date"]).dt.days
+df["WIP Days"] = df["WIP Days"].fillna((pd.Timestamp.now() - df["Start Date"]).dt.days).astype(int)
+filtered_df["WIP Days"] = df["WIP Days"]
+
 min_date = filtered_df["Start Date"].min()
 max_date = max(filtered_df["Start Date"].max(), filtered_df["End Date"].max(), filtered_df["Target Date"].max())
 date_range = pd.date_range(start=min_date, end=max_date)
@@ -119,13 +113,75 @@ for report_date in date_range:
 
     prev_closing_wip = closing_wip
 
-# ✅ Use this filtered KPI dataset everywhere now
 kpi_df = pd.DataFrame(kpi_data)
 
-# ---------------- AI Insights Section ----------------
-st.subheader("🧠 AI-Generated Insights")
+# ---------------- ADVANCED KPI ANALYTICS ENGINE ----------------
 
-# 🔍 WIP Analyzer (used for AI insights)
+# 🔹 Trend Frequencies
+kpi_df["Report Date Full"] = pd.date_range(start=min_date, end=max_date)
+
+# Daily WIP Trend (already built into KPI)
+daily_trend = kpi_df[["Report Date Full", "Closing WIP"]]
+
+# Weekly WIP Trend
+kpi_df["Week"] = pd.to_datetime(kpi_df["Report Date Full"]).dt.to_period("W").apply(lambda r: r.start_time)
+weekly_trend = kpi_df.groupby("Week")["Closing WIP"].mean().reset_index(name="Avg WIP")
+
+# Monthly WIP Trend
+kpi_df["Month"] = pd.to_datetime(kpi_df["Report Date Full"]).dt.to_period("M").astype(str)
+monthly_trend = kpi_df.groupby("Month")["Closing WIP"].mean().reset_index(name="Avg WIP")
+
+# Yearly WIP Trend
+kpi_df["Year"] = pd.to_datetime(kpi_df["Report Date Full"]).dt.year
+yearly_trend = kpi_df.groupby("Year")["Closing WIP"].mean().reset_index(name="Avg WIP")
+
+
+# 🔹 SLA Compliance & Breach
+kpi_df["Complete SLA %"] = kpi_df["Complete Within SLA %"].str.replace("%", "").astype(float)
+kpi_df["WIP SLA %"] = kpi_df["WIP in SLA %"].str.replace("%", "").astype(float)
+
+sla_summary = {
+    "Avg Complete SLA %": f"{int(kpi_df['Complete SLA %'].mean())}%",
+    "Avg WIP SLA %": f"{int(kpi_df['WIP SLA %'].mean())}%"
+}
+
+
+# 🔹 Pend Reasons Distribution (filtered only)
+if "Pend Reason" in filtered_df.columns:
+    pend_reason_summary = filtered_df["Pend Reason"].value_counts().head(10).to_dict()
+else:
+    pend_reason_summary = {}
+
+
+# 🔹 WIP Days Analysis
+avg_wip_days = int(df["WIP Days"].mean())
+wip_days_trend = df.groupby(df["Start Date"].dt.to_period("W").apply(lambda r: r.start_time))["WIP Days"].mean().reset_index()
+wip_days_trend.rename(columns={"WIP Days": "Avg WIP Days"}, inplace=True)
+
+# Outliers in WIP Days
+wip_days_q3 = df["WIP Days"].quantile(0.75)
+wip_days_outliers = df[df["WIP Days"] > wip_days_q3 + 1.5 * (wip_days_q3 - df["WIP Days"].quantile(0.25))]
+
+
+# 🔹 Breakdown by Factors
+factors = [
+    "Portfolio", "Source", "Location", "Event Type", "Process Name",
+    "Onshore/Offshore", "Manual/RPA", "Critical", "Vulnerable Customer", "Data Type"
+]
+
+breakdown_summary = {}
+
+for factor in factors:
+    if factor in df.columns:
+        grouped = df.groupby(factor).agg({
+            "WIP Days": "mean",
+            "Pend Case": lambda x: (x.astype(str).str.lower() == "yes").sum(),
+            "Start Date": "count"
+        }).rename(columns={"Start Date": "Total Cases"})
+        grouped["Avg WIP Days"] = grouped["WIP Days"].round(1)
+        breakdown_summary[factor] = grouped[["Avg WIP Days", "Total Cases", "Pend Case"]].sort_values(by="Avg WIP Days", ascending=False)
+        
+# ---------------- WIP SPIKE ANALYZER FUNCTION ----------------
 def analyze_wip_spikes(df_kpi, raw_df):
     df_kpi["Closing WIP Num"] = df_kpi["Closing WIP"]
     rolling_avg = df_kpi["Closing WIP Num"].rolling(window=3).mean()
@@ -162,68 +218,90 @@ def analyze_wip_spikes(df_kpi, raw_df):
 
     return analysis
 
+# ---------------- AI INSIGHTS SECTION ----------------
+st.subheader("🧠 AI-Generated Insights")
 
 if st.button("Generate Insights with GPT"):
+    # ⏳ Show spinner while working
     with st.spinner("Analyzing and generating insights..."):
-        deep_dive_insights = analyze_wip_spikes(kpi_df, filtered_df)  # 🔁 Updated here!
 
-        client = OpenAI(api_key=st.secrets["openai_key"])
+        deep_dive_insights = analyze_wip_spikes(kpi_df, filtered_df)
 
         story_prompt = f"""
-You are a senior operations analyst with deep expertise in back-office performance analysis.
+You are a senior operations analyst trusted with providing high-quality, data-backed performance insights.
 
-Below is structured data from a recent operational deep dive:
+Below is a filtered performance snapshot, based on the user's selected week and filters. Use this to identify trends, exceptions, patterns, and root causes.
 
-{json.dumps(deep_dive_insights, indent=2)}
+📊 **Performance Summary**:
 
-Please review the data and return exactly **5 concise bullet points** that:
+- **SLA Compliance**
+    • Completed within SLA: **{sla_summary['Avg Complete SLA %']}**
+    • WIP in SLA: **{sla_summary['Avg WIP SLA %']}**
 
-- Are clear, punchy, and no longer than 2 lines each
-- Include relevant **metrics** (e.g. % pend rate, volume counts)
-- Highlight key **issues**, **trends**, and **root causes**
-- Use **markdown-style emphasis** (e.g. **bold**, emojis like 📉📈🛠️✅) for readability
+- **WIP Days**
+    • Average WIP Days: **{avg_wip_days}**
+    • WIP Outliers: {len(wip_days_outliers)} rows exceeded upper bound
 
-Output format:
-- 📌 **[Bold Insight]** – supporting number(s) and short explanation.
+- **WIP Weekly Trend (last 4 weeks)**:
+{weekly_trend.tail(4).to_string(index=False)}
+
+- **Monthly Trend**:
+{monthly_trend.tail(2).to_string(index=False)}
+
+- **Top 3 Spike Days**:
+{"".join([
+    f"• {item['date']} – WIP: {item['closing_wip']}, Pend Rate: {item['pend_rate']}, Top Reasons: {', '.join(list(item['top_pend_reasons'].keys())[:2])}\n"
+    for item in deep_dive_insights[:3]
+])}
+
+- **Top Pend Reasons**:
+{json.dumps(pend_reason_summary, indent=2)}
+
+Now generate **5 strategic insights** that are:
+- Actionable and rooted in the data
+- 1–2 lines each
+- Use actual metrics (%, volumes, comparisons)
+- Point out unusual changes or bottlenecks
+- Highlight trends vs. previous period if visible
+- Use markdown emphasis (bold, bullet points, emojis like 📈📉✅🛠️)
+
+📌 Format:
+- 📌 **[Insight Title]** – supporting metric(s) and explanation.
 """
 
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are an expert in back-office operations and root cause analysis."},
-                {"role": "user", "content": story_prompt}
-            ],
-            temperature=0.5
-        )
-        gpt_bullets = response.choices[0].message.content
-        st.markdown(gpt_bullets)
-        
-# ---------------- CHARTS SECTION ----------------
+        try:
+            client = OpenAI(api_key=st.secrets["openai_key"])
+            response = client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are an expert in operations analysis."},
+                    {"role": "user", "content": story_prompt}
+                ],
+                temperature=0.5
+            )
+            gpt_bullets = response.choices[0].message.content
+            st.markdown(gpt_bullets)
+
+        except Exception as e:
+            st.error(f"❌ Error: {e}")
+            
+# ---------------- CHARTS ----------------
 st.markdown("## 📈 Operational Trends")
 
-# ✅ Use only filtered KPI data within selected week
 chart_df = kpi_df[kpi_df["Report Date"].isin(selected_labels)]
-
 labels = list(chart_df["Report Date"])
 cases_received = list(chart_df["Cases Received"])
 cases_complete = list(chart_df["Cases Complete"])
 closing_wip = list(chart_df["Closing WIP"])
 wip_sla_pct = [int(x.replace('%', '')) if '%' in x else 0 for x in chart_df["WIP in SLA %"]]
 complete_sla_pct = [int(x.replace('%', '')) if '%' in x else 0 for x in chart_df["Complete Within SLA %"]]
+pend_rate_chart = [int(row["Pend Rate"].replace('%', '')) if isinstance(row["Pend Rate"], str) else 0 for _, row in chart_df.iterrows()]
 
-# Pend Rate values from filtered KPI df
-pend_rate_chart = [
-    int(row["Pend Rate"].replace('%', '')) if isinstance(row["Pend Rate"], str) else 0
-    for _, row in chart_df.iterrows()
-]
-
-# Filter pend reasons for selected range
 pend_reasons = filtered_df[filtered_df["Start Date"].dt.strftime("%d-%b").isin(labels)]
 pend_reason_counts = pend_reasons["Pend Reason"].value_counts().to_dict()
 pend_reason_labels = list(pend_reason_counts.keys())
 pend_reason_values = list(pend_reason_counts.values())
 
-# ---------------- Row 1: WIP vs Cases + SLA Trends ----------------
 col1, col2 = st.columns(2)
 
 with col1:
@@ -243,7 +321,6 @@ with col2:
     sla_fig.update_layout(height=360)
     st.plotly_chart(sla_fig, use_container_width=True)
 
-# ---------------- Row 2: Pie Chart + Pend Rate ----------------
 col3, col4 = st.columns(2)
 
 with col3:
@@ -268,14 +345,55 @@ with col4:
     )
     st.plotly_chart(pend_fig, use_container_width=True)
 
-# ---------------- KPI Table ----------------
+# ---------------- KPI TABLE ----------------
 st.subheader("📋 KPI Table")
 st.dataframe(chart_df, use_container_width=True)
 
-# ---------------- AI CHATBOT SECTION ----------------
-import textwrap
+# ---------------- WIP SPIKE ANALYZER FUNCTION ----------------
+def analyze_wip_spikes(df_kpi, raw_df):
+    df_kpi["Closing WIP Num"] = df_kpi["Closing WIP"]
+    rolling_avg = df_kpi["Closing WIP Num"].rolling(window=3).mean()
+    df_kpi["WIP Spike"] = df_kpi["Closing WIP Num"] > rolling_avg * 1.2
 
-st.markdown("## 👋✨ Meet Opsi — Your Smart Operations Assistant")
+    spike_days = df_kpi[df_kpi["WIP Spike"] == True]["Report Date"].tolist()
+    prev_avg_wip = df_kpi["Closing WIP Num"].shift(1).rolling(window=5).mean()
+
+    analysis = []
+
+    for day in spike_days:
+        day_raw = raw_df[raw_df["Start Date"].dt.strftime("%d-%b") == day]
+        day_kpi = df_kpi[df_kpi["Report Date"] == day]
+
+        pend_total = day_raw["Pend Case"].notna().sum()
+        pend_yes = day_raw[day_raw["Pend Case"].astype(str).str.lower() == "yes"].shape[0]
+        pend_rate = round((pend_yes / pend_total * 100), 1) if pend_total > 0 else 0
+
+        pend_reason_counts = day_raw[day_raw["Pend Case"].astype(str).str.lower() == "yes"] \
+            .groupby("Pend Reason").size().sort_values(ascending=False).to_dict()
+
+        breakdown = {
+            "Portfolio": day_raw["Portfolio"].value_counts().head(3).to_dict(),
+            "Source": day_raw["Source"].value_counts().head(3).to_dict(),
+            "Event Type": day_raw["Event Type"].value_counts().head(3).to_dict(),
+            "Manual/RPA": day_raw["Manual/RPA"].value_counts().head(3).to_dict()
+        }
+
+        closing_wip = int(day_kpi["Closing WIP"].values[0])
+        avg_prev = int(prev_avg_wip[day_kpi.index[0]]) if not pd.isna(prev_avg_wip[day_kpi.index[0]]) else None
+
+        analysis.append({
+            "date": day,
+            "closing_wip": closing_wip,
+            "pend_rate": f"{pend_rate}%",
+            "top_pend_reasons": pend_reason_counts,
+            "breakdown": breakdown,
+            "vs_prev_avg": f"{closing_wip - avg_prev}" if avg_prev else "N/A"
+        })
+
+    return analysis
+
+# ---------------- AI CHATBOT SECTION ----------------
+st.markdown("## 🤖 Meet **Opsi** – Your Analyst Copilot")
 
 # ✅ Load the same CSV used for the dashboard from GitHub
 raw_url = "https://raw.githubusercontent.com/SwapnilGautama/AI-Insights-Dashboard/refs/heads/main/operational_data_full_jan_to_mar_2025.csv"
@@ -286,53 +404,55 @@ except Exception as e:
     st.error(f"❌ Failed to load data for chatbot (Opsi).\n\n**Error:** `{e}`")
     st.stop()
 
-# Summarize dataset for chatbot input
+# Use your WIP spike analyzer for full data
+deep_dive_insights_full = analyze_wip_spikes(kpi_df, raw_df)
+
+# Summarize dataset for GPT prompt
 summary_text = f"""
 📈 Basic Statistics:
 {raw_df.describe(include='all').fillna('-').to_string()}
 """
 
-# Input box for user query
-user_question = st.text_input("", placeholder="e.g. What’s the average pend rate in Jan?", key="chat_input")
+# Input box
+user_question = st.text_input("Ask anything about performance trends:", key="chat_input")
 
-# Enable Enter key to trigger submission
 if user_question:
-    with st.spinner("Analyzing your question..."):
-        from openai import OpenAI
-        client = OpenAI(api_key=st.secrets["openai_key"])
-
-        prompt = textwrap.dedent(f"""
-        You are **Opsi**, an expert in operational analytics and performance reporting.
-
-        You will be given:
-        1. A high-level summary of operational data (key statistics and patterns)
-        2. A user's analytical question about trends, performance, or root causes.
-
-        Your job:
-        - Answer concisely and insightfully using **actual metrics** (e.g. WIP, pend rate, SLA %)
-        - Provide **clear explanations**, ideally in **bullet points**
-        - Highlight **notable patterns** (spikes, declines, exceptions) and **root causes**
-        - Be accurate, data-driven, and use **simple language** for non-technical users
-
-        --- DATA SUMMARY ---
-        {summary_text}
-
-        --- USER QUESTION ---
-        {user_question}
-
-        Answer:
-        """)
-
+    with st.spinner("Opsi is thinking..."):
         try:
+            client = OpenAI(api_key=st.secrets["openai_key"])
+
+            prompt = textwrap.dedent(f"""
+            You are **Opsi**, an expert in operational analytics and performance reporting.
+
+            You will be given:
+            1. A high-level summary of operational data (key statistics and patterns)
+            2. A user's analytical question about trends, performance, or root causes.
+
+            Your job:
+            - Answer concisely and insightfully using **actual metrics** (e.g. WIP, pend rate, SLA %)
+            - Provide **clear explanations**, ideally in **bullet points**
+            - Highlight **notable patterns** (spikes, declines, exceptions) and **root causes**
+            - Be accurate, data-driven, and use **simple language** for non-technical users
+
+            --- DATA SUMMARY ---
+            {summary_text}
+
+            --- USER QUESTION ---
+            {user_question}
+
+            Answer:
+            """)
+
             response = client.chat.completions.create(
-                model="gpt-4",  # or "gpt-3.5-turbo"
+                model="gpt-4",  # or "gpt-3.5-turbo" if preferred
                 messages=[
-                    {"role": "system", "content": "You are a helpful analyst trained in data storytelling."},
+                    {"role": "system", "content": "You are a helpful analytics assistant named Opsi."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.5
             )
             reply = response.choices[0].message.content
             st.markdown(reply)
+
         except Exception as e:
             st.error(f"❌ Error: {e}")

@@ -12,13 +12,12 @@ st.title("📊 BackOffice Operations Dashboard with AI Insights")
 # ---------------- Load CSV from Google Drive ----------------
 import gdown
 
-# Download CSV from Google Drive using gdown
 file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
 gdown_url = f"https://drive.google.com/uc?id={file_id}"
 csv_path = "data.csv"
 
 try:
-    gdown.download(gdown_url, csv_path, quiet=False)
+    gdown.download(gdown_url, csv_path, quiet=False, fuzzy=True)
     df = pd.read_csv(csv_path, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
 except Exception as e:
     st.error(f"❌ Failed to load CSV from Google Drive using gdown.\n\n**Error:** `{e}`")

@@ -11,21 +11,21 @@ st.title("📊 BackOffice Operations Dashboard with AI Insights")
 
 # ---------------- Load CSV from Google Drive ----------------
 import gdown
+import os
 import pandas as pd
 import streamlit as st
 
-# Google Drive file ID
+# ---------------- CSV LOAD FROM GOOGLE DRIVE USING GDOWN ----------------
 file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
 gdown_url = f"https://drive.google.com/uc?id={file_id}"
-
-# Local path to save the file
-csv_path = "data.csv"
+csv_path = "data.csv"  # Local filename to store the CSV
 
 try:
-    # Download the file
-    gdown.download(gdown_url, csv_path, quiet=False)
+    # Check if file already exists locally, else download
+    if not os.path.exists(csv_path):
+        gdown.download(gdown_url, csv_path, quiet=False)
 
-    # Load the CSV
+    # Load into dataframe
     df = pd.read_csv(csv_path, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
 
 except Exception as e:

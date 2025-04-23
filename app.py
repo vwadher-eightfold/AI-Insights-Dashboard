@@ -12,26 +12,15 @@ st.title("📊 BackOffice Operations Dashboard with AI Insights")
 # ---------------- Load CSV from Google Drive ----------------
 import streamlit as st
 import pandas as pd
-import gdown
-import os
 
-# File ID from Google Drive
-file_id = "1mkVXQ_ZQsIXYnh72ysfqo-c2wyMZ7I_1"
+# ✅ Raw GitHub CSV URL
+csv_url = "https://raw.githubusercontent.com/SwapnilGautama/AI-Insights-Dashboard/refs/heads/main/operational_data_full_jan_to_mar_2025.csv"
 
-# Final gdown download URL
-gdown_url = f"https://drive.google.com/uc?id={file_id}"
-
-# Target file name (can be anything, but must match in read_csv)
-csv_path = "/tmp/data.csv"  # use /tmp for Streamlit Cloud compatibility
-
-# Download and load CSV
+# ✅ Load the CSV from GitHub
 try:
-    if not os.path.isfile(csv_path):
-        gdown.download(gdown_url, csv_path, quiet=False)
-
-    df = pd.read_csv(csv_path, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
+    df = pd.read_csv(csv_url, dayfirst=True, parse_dates=["Start Date", "End Date", "Target Date"])
 except Exception as e:
-    st.error(f"❌ Failed to load CSV from Google Drive using gdown.\n\n**Error:** {e}")
+    st.error(f"❌ Failed to load CSV from GitHub.\n\n**Error:** `{e}`")
     st.stop()
 
 df["Start Date"] = pd.to_datetime(df["Start Date"], errors='coerce')

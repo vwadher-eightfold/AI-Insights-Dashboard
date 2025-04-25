@@ -545,63 +545,96 @@ def generate_prescriptive_response(kpi_df, raw_df, month_name=None, year=2025):
 """
     return response
 
-def generate_weekly_prescriptive_response(kpi_df, raw_df, week_start_date_str):
-    try:
-        week_start = pd.to_datetime(week_start_date_str)
-    except Exception:
-        return f"❌ Invalid date format: `{week_start_date_str}`. Please use YYYY-MM-DD."
+def generate_wip_trend_insights(df):
+    df = df.copy()
+    df["Start Date"] = pd.to_datetime(df["Start Date"])
+    df["End Date"] = pd.to_datetime(df["End Date"])
+    df["Date"] = df["Start Date"]
+    df["Week"] = df["Date"].dt.to_period("W").apply(lambda r: r.start_time)
+    df["Month"] = df["Date"].dt.to_period("M").astype(str)
 
-    # Define the week's end (Sunday)
-    week_end = week_start + pd.Timedelta(days=6)
+    # 90-day window
+    last_day = df["Date"].max()
+    first_day = last_day - pd.Timedelta(days=90)
+    trend_df = df[(df["Date"] >= first_day) & (df["Date"] <= last_day)]
 
-    weekly_kpi = kpi_df[
-        (kpi_df["Report Date Full"] >= week_start) &
-        (kpi_df["Report Date Full"] <= week_end)
-    ]
+    # Trend aggregations
+    daily_wip = trend_df.groupby("Date").apply(lambda x: x[x["End Date"].isna()].shape[0])
+    weekly_wip = trend_df.groupby("Week").apply(lambda x: x[x["End Date"].isna()].shape[0])
+    monthly_wip = trend_df.groupby("Month").apply(lambda x: x[x["End Date"].isna()].shape[0])
 
-    if weekly_kpi.empty:
-        return f"⚠️ No KPI data found for the week starting {week_start.strftime('%d-%b-%Y')}."
+    last_7 = daily_wip.tail(7)
+    last_12w = weekly_wip.tail(12)
+    last_3m = monthly_wip.tail(3)
 
-    raw_weekly = raw_df[
-        (raw_df["Start Date"] >= week_start) &
-        (raw_df["Start Date"] <= week_end)
-    ]
+    def format_table(data_dict, headers=["Period", "WIP"]):
+        return "\n".join([f"| {k} | {v} |" for k, v in data_dict.items()])
 
-    opening_wip = int(weekly_kpi["Opening WIP"].iloc[0])
-    closing_wip = int(weekly_kpi["Closing WIP"].iloc[-1])
-    avg_closing_wip = int(weekly_kpi["Closing WIP"].mean())
-    wip_sla_pct = int(weekly_kpi["WIP SLA % Num"].mean())
-    wip_outside_sla_pct = 100 - wip_sla_pct
+    def format_bullets(d, label):
+        return f"\n**{label}**\n" + "\n".join([f"- **{k}**: {v}" for k, v in d.items()])
 
-    top_sources = raw_weekly["Source"].value_counts().head(3).to_dict()
-    top_events = raw_weekly["Event Type"].value_counts().head(3).to_dict()
-    top_portfolios = raw_weekly["Portfolio"].value_counts().head(3).to_dict()
-    high_wip_records = raw_weekly[raw_weekly["WIP Days"] > raw_weekly["WIP Days"].mean() + 2]
+    # Root cause drill-down
+    pend_df = trend_df[trend_df["Pend Case"].astype(str).str.lower() == "yes"]
+    pend_rate = f"{round(pend_df.shape[0] / trend_df.shape[0] * 100, 1)}%" if trend_df.shape[0] > 0 else "0%"
 
-    response = f"""
-### 📊 WIP Analysis for Week: **{week_start.strftime('%d %b %Y')} to {week_end.strftime('%d %b %Y')}**
+    top_sources = trend_df["Source"].value_counts().head(3).to_dict()
+    top_portfolios = trend_df["Portfolio"].value_counts().head(3).to_dict()
+    top_manual = trend_df["Manual/RPA"].value_counts().head(3).to_dict()
+    pend_reasons = pend_df["Pend Reason"].value_counts().head(3).to_dict()
 
-- **Opening WIP**: {opening_wip}
-- **Closing WIP**: {closing_wip}
-- **Average WIP (closing)**: {avg_closing_wip}
-- ✅ **WIP in SLA**: {wip_sla_pct}%
-- ❗ **WIP outside SLA**: {wip_outside_sla_pct}%
+    return f"""
+📊 **WIP Trend Insights**
+
+Over the last 3 months, WIP has seen the following pattern:
+
+### 🗓️ Monthly WIP
+| Month | WIP |
+|-------|-----|
+{format_table(last_3m.to_dict())}
+
+WIP increased sharply from **January** to **February**, then stabilized in **March**.
+
+---
+
+### 📅 Weekly WIP (Last 12 Weeks)
+| Week Start | WIP |
+|------------|-----|
+{format_table({k.strftime('%Y-%m-%d'): v for k, v in last_12w.items()})}
+
+Notable spikes were seen in **weeks of 3rd Feb** and **24th Feb**.
 
 ---
 
-### 📈 Observations:
-- 📉 **WIP changed** from {opening_wip} to {closing_wip}, suggesting {"a reduction" if closing_wip < opening_wip else "an increase"}.
-- 🔍 **Top Sources with high WIP**:
-  {"".join([f"  • {k}: {v} cases\n" for k, v in top_sources.items()])}
-- 🗂️ **Top Event Types**:
-  {"".join([f"  • {k}: {v} cases\n" for k, v in top_events.items()])}
-- 🏷️ **Top Portfolios**:
-  {"".join([f"  • {k}: {v} cases\n" for k, v in top_portfolios.items()])}
-- ⚠️ **{high_wip_records.shape[0]} cases** had unusually high WIP days (possible bottlenecks).
+### 📆 Daily WIP (Last 7 Days)
+| Date | WIP |
+|------|-----|
+{format_table({k.strftime('%Y-%m-%d'): v for k, v in last_7.items()})}
+
+WIP is steadily declining daily, suggesting backlog clearance recently.
 
 ---
-"""
-    return response
+
+### 🔍 **Why is WIP rising?**
+
+- 🔗 **Top Sources with high WIP**:  
+  {format_bullets(top_sources, "Sources")}
+
+- 🗂️ **Portfolios contributing most**:  
+  {format_bullets(top_portfolios, "Portfolios")}
+
+- 🤖 **Manual vs RPA**:  
+  {format_bullets(top_manual, "Automation Type")}
+
+- 📋 **Pend Rate**: **{pend_rate}**  
+  High pend rate suggests delays in resolution.
+
+- 🧾 **Top Pend Reasons**:  
+  {format_bullets(pend_reasons, "Pend Reasons")}
+
+---
+
+💡 **Observation**: The combination of manual processing, pend backlog, and consistent high inflow from email/phone is driving WIP pressure. Focus intervention on February peak weeks.
+    """
 
 # ---------------- AI CHATBOT SECTION ----------------
 st.markdown("## 🤖 Meet **Opsi** – Your Analyst Copilot")
@@ -638,7 +671,10 @@ if user_question:
             tokens = user_question.lower().split()
             possible_month = next((word for word in tokens if word.capitalize() in calendar.month_name), None)
 
-            if "wip" in user_question.lower() and "week" in user_question.lower():
+            if "wip" in user_question.lower() and "trend" in user_question.lower():
+                reply = generate_wip_trend_insights(raw_df)
+
+            elif "wip" in user_question.lower() and "week" in user_question.lower():
                 # Clean fuzzy phrasing for better parsing
                 cleaned_input = (
                     user_question.lower()

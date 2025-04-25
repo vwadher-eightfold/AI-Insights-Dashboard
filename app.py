@@ -546,6 +546,8 @@ def generate_prescriptive_response(kpi_df, raw_df, month_name=None, year=2025):
     return response
 
 def generate_wip_trend_insights(df):
+    import numpy as np
+
     df = df.copy()
     df["Start Date"] = pd.to_datetime(df["Start Date"])
     df["End Date"] = pd.to_datetime(df["End Date"])
@@ -553,12 +555,12 @@ def generate_wip_trend_insights(df):
     df["Week"] = df["Date"].dt.to_period("W").apply(lambda r: r.start_time)
     df["Month"] = df["Date"].dt.to_period("M").astype(str)
 
-    # 90-day window
+    # 90-day trend window
     last_day = df["Date"].max()
     first_day = last_day - pd.Timedelta(days=90)
     trend_df = df[(df["Date"] >= first_day) & (df["Date"] <= last_day)]
 
-    # Trend aggregations
+    # Aggregated WIP
     daily_wip = trend_df.groupby("Date").apply(lambda x: x[x["End Date"].isna()].shape[0])
     weekly_wip = trend_df.groupby("Week").apply(lambda x: x[x["End Date"].isna()].shape[0])
     monthly_wip = trend_df.groupby("Month").apply(lambda x: x[x["End Date"].isna()].shape[0])
@@ -567,74 +569,84 @@ def generate_wip_trend_insights(df):
     last_12w = weekly_wip.tail(12)
     last_3m = monthly_wip.tail(3)
 
-    def format_table(data_dict, headers=["Period", "WIP"]):
-        return "\n".join([f"| {k} | {v} |" for k, v in data_dict.items()])
+    def horizontal_table(data):
+        keys = list(data.keys())
+        values = list(data.values())
+        header = "| " + " | ".join(keys) + " |"
+        separator = "| " + " | ".join(["---"] * len(keys)) + " |"
+        row = "| " + " | ".join(str(v) for v in values) + " |"
+        return f"{header}\n{separator}\n{row}"
 
-    def format_bullets(d, label):
-        return f"\n**{label}**\n" + "\n".join([f"- **{k}**: {v}" for k, v in d.items()])
+    def format_bullets(d):
+        return "\n".join([f"- **{k}**: {v}" for k, v in d.items()])
 
-    # Root cause drill-down
+    # Root causes
     pend_df = trend_df[trend_df["Pend Case"].astype(str).str.lower() == "yes"]
-    pend_rate = f"{round(pend_df.shape[0] / trend_df.shape[0] * 100, 1)}%" if trend_df.shape[0] > 0 else "0%"
+    pend_rate = round(pend_df.shape[0] / trend_df.shape[0] * 100, 1) if trend_df.shape[0] > 0 else 0
 
     top_sources = trend_df["Source"].value_counts().head(3).to_dict()
     top_portfolios = trend_df["Portfolio"].value_counts().head(3).to_dict()
     top_manual = trend_df["Manual/RPA"].value_counts().head(3).to_dict()
     pend_reasons = pend_df["Pend Reason"].value_counts().head(3).to_dict()
 
+    # 🔍 Detect WIP Increase
+    month_keys = list(last_3m.keys())
+    callout = ""
+    if len(month_keys) >= 2:
+        first = last_3m[month_keys[0]]
+        second = last_3m[month_keys[1]]
+        third = last_3m[month_keys[2]]
+        delta1 = second - first
+        delta2 = third - second
+
+        if delta1 > 0:
+            callout = f"""
+🔺 **WIP spiked by {delta1} cases from {month_keys[0]} to {month_keys[1]}**, likely due to:
+- 📋 Increase in manual processing: **{top_manual}**
+- 🔗 Surge in specific sources: **{top_sources}**
+- 🧾 Pend Rate at **{pend_rate}%** with top reasons: {", ".join(pend_reasons.keys())}
+"""
+        elif delta2 > 0:
+            callout = f"""
+🔺 **WIP continued to rise from {month_keys[1]} to {month_keys[2]}**, driven by:
+- Manual load: **{top_manual}**
+- Source mix: **{top_sources}**
+- High pend backlog: **{pend_rate}%**
+"""
+
     return f"""
-📊 **WIP Trend Insights**
+📊 **WIP Trend Insights (Last 3 Months)**
 
-Over the last 3 months, WIP has seen the following pattern:
+### 🗓️ Monthly WIP  
+{horizontal_table(last_3m.to_dict())}
 
-### 🗓️ Monthly WIP
-| Month | WIP |
-|-------|-----|
-{format_table(last_3m.to_dict())}
+### 📅 Weekly WIP (Last 12 Weeks)  
+{horizontal_table({k.strftime('%Y-%m-%d'): v for k, v in last_12w.items()})}
 
-WIP increased sharply from **January** to **February**, then stabilized in **March**.
-
----
-
-### 📅 Weekly WIP (Last 12 Weeks)
-| Week Start | WIP |
-|------------|-----|
-{format_table({k.strftime('%Y-%m-%d'): v for k, v in last_12w.items()})}
-
-Notable spikes were seen in **weeks of 3rd Feb** and **24th Feb**.
+### 📆 Daily WIP (Last 7 Days)  
+{horizontal_table({k.strftime('%Y-%m-%d'): v for k, v in last_7.items()})}
 
 ---
 
-### 📆 Daily WIP (Last 7 Days)
-| Date | WIP |
-|------|-----|
-{format_table({k.strftime('%Y-%m-%d'): v for k, v in last_7.items()})}
-
-WIP is steadily declining daily, suggesting backlog clearance recently.
+{callout if callout else '📉 No significant spike detected in WIP trends. WIP is stable or decreasing.'}
 
 ---
 
-### 🔍 **Why is WIP rising?**
+### 🔍 Drivers Behind WIP
+- 🔗 **Top Sources**  
+{format_bullets(top_sources)}
 
-- 🔗 **Top Sources with high WIP**:  
-  {format_bullets(top_sources, "Sources")}
+- 🗂️ **Top Portfolios**  
+{format_bullets(top_portfolios)}
 
-- 🗂️ **Portfolios contributing most**:  
-  {format_bullets(top_portfolios, "Portfolios")}
+- 🤖 **Manual vs RPA**  
+{format_bullets(top_manual)}
 
-- 🤖 **Manual vs RPA**:  
-  {format_bullets(top_manual, "Automation Type")}
+- 📋 **Pend Rate**: **{pend_rate}%**
 
-- 📋 **Pend Rate**: **{pend_rate}**  
-  High pend rate suggests delays in resolution.
-
-- 🧾 **Top Pend Reasons**:  
-  {format_bullets(pend_reasons, "Pend Reasons")}
-
----
-
-💡 **Observation**: The combination of manual processing, pend backlog, and consistent high inflow from email/phone is driving WIP pressure. Focus intervention on February peak weeks.
-    """
+- 🧾 **Top Pend Reasons**  
+{format_bullets(pend_reasons)}
+"""
 
 # ---------------- AI CHATBOT SECTION ----------------
 st.markdown("## 🤖 Meet **Opsi** – Your Analyst Copilot")

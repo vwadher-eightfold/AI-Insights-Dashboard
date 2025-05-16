@@ -308,7 +308,7 @@ def analyze_wip_spikes(df_kpi, raw_df):
 # ---------------- AI INSIGHTS SECTION ----------------
 st.subheader("🧠 AI-Generated Insights")
 
-if st.button("Generate Insights with GPT"):
+if st.button("Generate Intelligent Insights with AI"):
     # ⏳ Show spinner while working
     with st.spinner("Analyzing and generating insights..."):
 
